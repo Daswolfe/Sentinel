@@ -1,256 +1,203 @@
-# SENTINEL — Reassessment & Roadmap
+# SENTINEL — Roadmap & Strategy
 
-A candid look at where the project stands after the maritime build, what's solid,
-what's fragile, and what to build next in priority order.
+An open-source 4D geospatial command center: one Three.js globe fusing live
+satellites, aircraft (civil + military), maritime AIS with dark-ship detection,
+seismic, conflict, GPS-jamming, thermal, launches, airports, cities, and bike
+share — with deep-zoom imagery + 3D buildings, weather radar, a 4D time
+scrubber, an alert engine, and a local-LLM intel report.
 
----
-
-## Where it stands (v0.4)
-
-**Architecture is now right for the problem.** The move from one HTML file to a
-backend + frontend monorepo was the correct call: live AIS needs a persistent
-server-side websocket, secrets need to live server-side, and dark-ship detection
-needs stateful memory. All three now have a proper home.
-
-**What's genuinely solid:**
-- The backend is small, dependency-light (`ws` + `dotenv`), and cleanly separated:
-  AIS relay, ports index, OpenSky proxy, and HTTP/WS server are independent modules.
-- The dark-ship engine does real work: dedup, underway-then-silent detection,
-  resurface tracking with jump distance, and now port-based false-positive
-  suppression. The decision logic is unit-tested in isolation.
-- The frontend maritime client is a pure module (no THREE/DOM), so it's reusable
-  and testable.
-- Config and geo helpers are extracted into their own modules, so `main.js` is now
-  an orchestrator rather than a monolith.
-
-**What's still fragile (known debt):**
-1. **✅ RESOLVED — `main.js` monolith.** Layers are now separate modules behind a
-   registry; `main.js` is a 595-line host. Adding a layer no longer touches the core.
-2. **✅ RESOLVED — no automated tests.** 17 tests now run via `npm test` (backend
-   logic + AIS-ingest schema fixture + frontend registry).
-3. **✅ RESOLVED in practice — live AIS verified.** The relay runs against the real
-   aisstream feed (global subscription, 15k+ vessels tracked). Known upstream
-   limitation: aisstream is volunteer terrestrial receivers, so sectors without
-   receivers (observed: Persian Gulf / India) deliver nothing — paid satellite AIS
-   is the only real fix. `npm run verify-ais` remains useful for schema drift.
-4. **Single backend process, in-memory state.** Fine for one operator. If the
-   process restarts, dark-ship history resets. Persistence (below) fixes this.
-5. **No auth on the backend.** Anyone who can reach the port gets the feed. Fine on
-   localhost; needs a token before you expose it.
+**Repo:** github.com/Daswolfe/Sentinel (private) · **Last updated:** 2026-07-10
 
 ---
 
-## Roadmap (priority order)
+## 1. Where it stands
 
-### Tier 1 — do these next (high value, low risk)
+The single-file prototype is long gone. SENTINEL is a small monorepo — a
+no-framework Node backend (AIS relay, dark-ship engine, analytics, a dozen
+data proxies, optional SQLite) and a Vite + vanilla-Three.js frontend where
+every data source is a self-contained layer module behind a registry. Adding a
+layer never touches the core.
 
-**1. ✅ DONE — Finish modularizing `main.js`.**
-Each layer now lives in `web/src/layers/<name>.js` behind a common interface. A
-layer module exports `{ id, name, color, load(ctx), … }` and optional hooks
-(`init`, `tick`, `onScrub`, `onRegion`, `onVisible`, `companions`). `main.js` is now
-a ~595-line host (globe + UI + timeline + alerts) that loads layers through the
-`LayerRegistry`; the core no longer changes when you add a layer. See "Adding a new
-layer" in the README.
+**Solid foundations**
+- **Layer architecture** — one file per source (`web/src/layers/*`); the host
+  (`main.js`) provides globe, UI, picking, timeline, alerts, filters. New layer
+  = write a module, register it.
+- **Backend separation** — AIS relay, ports index, analytics, and each upstream
+  proxy are independent modules; secrets stay server-side.
+- **Tested** — 17 tests (`npm test`): dark-ship state machine, ports, a captured
+  live-AIS fixture through the real ingest path, and the frontend registry.
+- **Live-verified** — real aisstream feed (global, 15k+ vessels), OpenSky OAuth2,
+  and every keyless feed confirmed in-browser.
 
-**2. ✅ DONE — Real test suite.**
-`server/logic.test.js` (ports + dark-ship state machine) and `web/registry.test.js`
-(context/registry data-flow, including the scrub-freeze behavior), plus a captured
-live-feed fixture through the real `_ingest`. 17 tests total, `npm test`.
-
-**3. ✅ DONE — `verify-ais` run and schema locked.**
-Verified against the live feed 2026-07-09 (all field paths ✓). A captured
-PositionReport now lives in `server/fixtures/` and runs through the real
-`_ingest` in `logic.test.js`, so schema drift fails the offline test suite.
-
-### Tier 2 — persistence & robustness
-
-**4. ✅ DONE — Persist AIS + alert history (SQLite).**
-`server/db.js` (better-sqlite3, WAL): vessel breadcrumb fixes (48 h rolling) and
-alerts (30 d) survive restarts; `/ais/track` transparently serves the longer
-persisted track. Loaded dynamically — the server still runs if the native module
-is missing. The frontend additionally has a browser-side **DVR** (IndexedDB,
-1-min frames, ≤48 h) behind the 4D scrubber.
-
-**5. ✅ DONE — Backend auth.**
-Optional `BACKEND_TOKEN` env var: REST requires `Authorization: Bearer` (or
-`?token=`), the WS handshake requires `/ws?token=`. Empty = open (localhost).
-Per-IP rate caps remain TODO if ever exposed publicly.
-
-**6. ✅ DONE — Health/metrics strip.**
-Header strip polls `/health` every 30 s: tracked vessels, dark flagged vs
-suppressed, STS alerts, OpenSky auth, DB status.
-
-### Tier 3 — analytic depth (the "intelligence" in OSINT)
-
-**7. ✅ DONE — Ship-to-ship (STS) transfer detection.**
-`server/analytics.js`: grid-bucketed scan every 5 min for pairs with SOG ≤ 0.8 kt,
-≤ 500 m apart, away from any port/anchorage, sustained ≥ 25 min → `STS TRANSFER
-CANDIDATE` alert with separation and hold time. Stats surface in `/health`.
-
-**8. ✅ DONE — Cross-layer correlation.**
-Every maritime alert (dark / resurface / STS) is enriched server-side before
-broadcast: inside/near a GPS-denied zone? conflict clusters within 250 km? The
-context rides on the alert (`⚠ …` suffix in the UI). Feeding correlated events to
-the local-LLM SITREP is the natural next step.
-
-**9. Loitering & route-anomaly detection.** *(remaining)*
-Deferred deliberately: without shore-distance/anchorage-area data beyond the port
-index, a loiter detector false-positives on every roads anchorage. Needs either
-OSM anchorage polygons or a learned lane baseline first.
-
-**10. ✅ DONE — GPS jamming is live, with denied-zone clustering.**
-The backend proxies gpsjam.org's daily H3 interference data (`server/gpsjam.js` →
-`/api/gpsjam`), decoding hex cells to centroids. Default cut is the *high* band
-(>10% bad fixes from ≥10 aircraft — the deliberate-jamming signature; tune with
-`JAMMING.minPct`/`minAircraft` or `?minPct=` on the endpoint). Dense fields
-(Baltic, Hormuz, Black Sea…) are merged into **GPS-DENIED ZONES** rendered as
-rings with centroid stats. Deriving zones from *our own* OpenSky pulls in real
-time remains a possible upgrade for intra-day latency.
-
-### Tier 4 — packaging & reach
-
-**11. Desktop app via Tauri.**
-Wrap `web/` in a Tauri shell (~10 MB, Rust) with the Node backend as a sidecar, for
-a true "runs locally on a machine" installer without shipping Chromium. Do this once
-the layer architecture (Tier 1) is stable.
-
-**12. Docker Compose one-liner.**
-`docker compose up` bringing up backend + a static nginx for the built frontend, so
-anyone can run the whole stack without a Node toolchain.
-
-**13. Recorded-scenario mode.**
-Replay a saved capture (from the SQLite archive) so you can demo or analyze a past
-event offline — and so contributors can develop without live keys.
+**Known debt / limits**
+- **Single backend process, mostly in-memory.** SQLite persists vessel tracks +
+  alerts; the rest of the live picture is RAM. Fine for one operator.
+- **No per-IP rate limiting.** A shared `BACKEND_TOKEN` gates access, but there's
+  no connection cap — needed before any public exposure.
+- **aisstream coverage gaps.** Volunteer terrestrial receivers, so receiver-poor
+  sectors (Persian Gulf / India observed) deliver nothing. Only paid satellite
+  AIS fixes it.
+- **Screenshot/verify friction.** The WebGL canvas resists automated screenshot
+  capture in the dev harness; verification is done via DOM/scene introspection.
 
 ---
 
-## Shipped since v0.4 (2026-07-08 session)
+## 2. Capabilities shipped
 
-- **Global AIS** (8-quadrant subscription, 100k vessel cap) + **NGA World Port
-  Index** (~2,900 ports) backing dark-ship suppression.
-- **Conflict layer rebuilt** on GDELT 2.0 bulk events (`server/gdelt.js`) after the
-  GEO JSON API died — rolling 24 h, CAMEO conflict classes, 0.5° clusters.
-- **GPS jamming live** via gpsjam.org proxy (`server/gpsjam.js`).
-- **Deep zoom to building scale**: Esri World Imagery tiles draped under the camera
-  (`web/src/tiles.js`), altitude-scaled controls, dynamic near-plane.
-- **HD basemap modes**: 8K Blue Marble / 4K daily MODIS with anisotropy + sRGB.
-- **Region Focus filtering**: all layers clipped to the bbox; satellites kept by
-  line-of-sight; instant re-filter from cached frames.
-- **Full `active` satellite catalog** (cap 1,500) with localStorage TLE cache and
-  fallback group against CelesTrak's 2 h download throttle.
-- **Data-provenance badges** (LIVE/SIM/OFF/ERR) on every layer + legend.
-- **Per-layer color pickers** (persisted), **quake magnitude slider**,
-  **click-to-locate alerts**.
-- **OpenSky OAuth2 + FIRMS keys wired**; backend port renamed `BACKEND_PORT` (the
-  generic `PORT` gets hijacked by dev harnesses/PaaS for the frontend).
-- **GPS-denied zones**: jamming defaults to the malicious band (>10% bad fixes,
-  ≥10 aircraft) and clusters cell fields into ringed zones with radius/stats.
-- **Contact paths on click**: aircraft get their full flight track (OpenSky
-  `/api/opensky/track`) plus an altitude/ground-speed **flight profile panel**;
-  vessels get breadcrumb history from the relay (`/api/ais/track`, 5-min fixes).
-- **Airports layer** (OurAirports large/medium) with **decoded METAR/TAF** per
-  field via `/api/avwx` (aviationweather.gov proxy) and a wind compass rose.
-- **Surface weather visuals**: wind rose + plain-English WMO conditions on
-  surface-point clicks.
-- **Double-click orbit focus**: swivel the camera around any picked object;
-  double-click empty space to release.
-- **Parallax fix**: all ground-origin layers, coastlines and graticule now hug
-  the surface (≤ ~5 km equivalent) instead of floating 20–45 km up.
+### Data layers
+| Layer | Source | Notes |
+|---|---|---|
+| Satellites | CelesTrak `active` + SGP4 | client-side propagation, TLE cache, ghost trails |
+| Aircraft | OpenSky (OAuth2 proxy) | flight path + alt/speed profile on click; oriented ✈ |
+| Military Air | adsb.lol `/v2/mil` (proxy) | global, keyless, ~250; oriented ✈, dossier/path |
+| Maritime AIS + Dark | aisstream relay | dark-ship + resurface + STS engine; oriented ➤; trails |
+| Seismic | USGS | magnitude slider (default M≥4.5) |
+| Weather/Events | NASA EONET + Open-Meteo | surface-click weather with wind rose |
+| Conflict | GDELT 2.0 bulk events (proxy) | rolling 24 h, CAMEO classes, 0.5° clusters |
+| GPS Jamming | gpsjam.org (proxy) | high-band cut, clustered into GPS-DENIED ZONES |
+| Thermal/Fire | NASA FIRMS (proxy) | FRP → plain-English fire scale; realistic default cut |
+| Launches | Launch Library 2 | plotted at pad; imminent-launch alerts |
+| Airports | OurAirports + aviationweather (proxy) | decoded METAR/TAF, wind rose, runway diagram; ╳ symbol |
+| Cities | Natural Earth | toggleable cartography, default-off, labeled |
+| Bike Share | curated GBFS (proxy) | ~10k stations, live bikes/docks, lazy default-off |
+| Weather Radar | RainViewer (`⛆ RADAR`) | global animated precip (incl. US NEXRAD) |
+| Stubs | — | Power/Net outages, Social — labeled adapters, unwired |
 
-## QOL backlog — ✅ shipped 2026-07-09
+### Backend & analytics
+- **AIS relay + dark-ship engine** — dedup, underway→silent detection, resurface
+  (dark-minutes + jump nm), NGA World Port Index (~2,900 ports) false-positive
+  suppression.
+- **STS-transfer detection** (`analytics.js`) — stationary pairs ≤500 m, away
+  from port, ≥25 min → alert.
+- **Cross-layer correlation** — maritime alerts enriched server-side with nearby
+  GPS-denied zones / conflict clusters before broadcast.
+- **Proxies (keeps secrets + dodges CORS)** — OpenSky states/track, gpsjam,
+  GDELT, aviationweather (avwx), adsb.lol mil, bikeshare, FIRMS, and Ollama LLM.
+- **Persistence** — optional `better-sqlite3` (WAL): vessel fixes 48 h, alerts
+  30 d, loaded dynamically. Frontend DVR (IndexedDB, 1-min frames ≤48 h) backs
+  the 4D scrubber.
+- **Auth** — optional `BACKEND_TOKEN` on REST + WS. **Health strip** polls
+  `/health` (tracked, dark flagged/suppressed, STS, DB, LLM ready).
 
-- ✅ **Layer icons** — per-layer sprite picker (● ▲ ▼ ■ ◆ ✚ ✈ ⚓ ⚠), persisted;
-  aircraft/ships/dark default to ✈ / ⚓ / ⚠.
-- ✅ **In-layer filters** — flag state (ITU MID for vessels, ICAO24 hex blocks for
-  aircraft), military vs civilian (ship type 35 + naval prefixes; US-mil hex block
-  + military callsigns), NOTABLE watchlist (`web/src/contactFilters.js`).
-- ✅ **Contact search bar** — name/MMSI/callsign/hex across SEA/DARK/AIR/APT/SAT;
-  flies to the first match and opens its detail panel.
-- ✅ **Cartography** — Natural Earth 50m full-res borders (old decimated crossing
-  LineLoops replaced), nation-name labels at cartographic label points (NAMES
-  toggle), Cities layer (NE populated places, default-off, labeled top 150).
-  Roads intentionally NOT vector — the deep-zoom Esri imagery carries them.
-- ✅ **Thermal context** — FIRMS detections carry FRP → plain-English fire scale
-  (small burn / 1–10 acres / 10–100 / major / extreme) + brightness context, and
-  the layer now defaults to a realistic cut (FRP ≥ 10 MW).
-- ✅ **Alert management** — per-alert ✓ acknowledge (dims, count tracks unacked)
-  and ✕ delete; ✓ ALL in the panel header.
-- ✅ **Snapshot DVR** — 1-min frames to IndexedDB (≤48 h); the 4D scrubber spans
-  the DVR window (falls back to DVR frames past the ~50-min fine buffer); 📷
-  SNAPSHOT exports the full global picture as JSON. Server-side SQLite (Tier 2 #4)
-  is the durable substrate for vessel tracks.
+### Frontend / UX
+- **Globe & camera** — deep-zoom Esri imagery tiles + OSM Buildings extrusions
+  below ~30 km; **free-look** at deep zoom (right-drag tilt/rotate, screen-
+  relative left-drag pan); double-click orbit-focus any object; alert click →
+  dive to max zoom.
+- **Markers** — ghost trails on all movers; heading-oriented **directional
+  icons** (➤ chevron, ✈ plane, 🚁 heli as textured instances) + static sprites;
+  per-layer **style menu** (colour + icon + size, persisted).
+- **Filters** — flag state, mil/civ, NOTABLE watchlist, UNDERWAY, aircraft
+  altitude band, satellite orbit band; **contact search** (name/MMSI/callsign/
+  hex); quake-magnitude slider.
+- **Time** — 4D scrubber + DVR; 📷 JSON snapshot export.
+- **Alerts** — acknowledge / delete / locate; browser notifications.
+- **Cartography** — Natural Earth full-res borders + zoom-scaled nation & city
+  labels; LIVE/SIM/OFF/ERR provenance badges on every layer.
+- **Intel report** — local **Ollama** SITREP, streamed token-by-token through
+  the backend `/api/llm` proxy (no browser CORS config needed).
 
-## New data sources — ✅ shipped 2026-07-10 (Phase A)
+---
 
-- ✅ **Ghost trails** — short fading breadcrumb behind every aircraft / ship /
-  satellite, always on regardless of focus. Shared `web/src/markers.js`
-  (`TrailSet`); satellites accumulate their SGP4 subpoints, ships/aircraft their
-  plotted positions; scrub-guarded so the 4D scrubber can't poison live history.
-- ✅ **Directional arrow markers** — heading-oriented chevrons (InstancedMesh,
-  tangent to the sphere) for aircraft/military/ships, with instance-id picking;
-  toggled via the icon picker (`➤`). Non-oriented layers keep point sprites.
-- ✅ **Military aircraft** — adsb.lol `/v2/mil` via backend proxy (CORS-blocked
-  in-browser); global, keyless, ~250 aircraft, magenta arrows + dossier/path on
-  click (`web/src/layers/milair.js`, `/api/milair`).
-- ✅ **Bike share (GBFS)** — `server/bikeshare.js` resolves ~12 curated dock-based
-  systems from the MobilityData catalog and merges station_information +
-  station_status server-side (~10k stations, live bikes/docks). Lazy default-off
-  layer (`/api/bikeshare`); framework gained a `lazy` flag so heavy layers load
-  only on first enable.
-- ✅ **Global weather radar** — `web/src/radar.js`: RainViewer mercator tiles
-  assembled into a global overlay shell, animated through past + nowcast frames
-  (`⛆ RADAR` header toggle). RainViewer's mosaic already includes US NEXRAD, so
-  this is the "NEXRAD + worldwide" surveillance ask in one keyless source.
+## 3. In progress / awaiting input
 
-## Phase D — ✅ shipped 2026-07-10
+- **Phase B — CCTV + street-level** *(awaiting two free keys)*. Windy Webcams API
+  (global public webcams) + Mapillary (open street-level imagery on click). Code
+  design is set; blocked only on you registering the keys — the GitHub repo URL
+  now exists for those forms.
+- **Correlation → SITREP** *(small, unblocked)*. Every maritime alert already
+  carries cross-layer context; the intel-report prompt still feeds raw counts.
+  Wiring the correlated events in is the cheapest high-value win.
+- **Loitering / route-anomaly** *(blocked on data)*. Needs OSM anchorage polygons
+  or a learned shipping-lane baseline first, or it false-positives on every
+  legitimate anchorage.
 
-- ✅ **3D buildings at deep zoom** — `web/src/buildings.js`: OSM Buildings z15
-  GeoJSON footprints (height/levels attributes) extruded into ONE merged prism
-  geometry per tile (walls + ShapeUtils-triangulated roofs — one draw call per
-  tile) on the local tangent plane, activating below ~32 km altitude around the
-  camera ground point. Lambert-shaded via a HemisphereLight that Basic-material
-  layers ignore. `⌂ 3D` header toggle. **Google 3D Tiles upgrade seam**: the
-  class's `update()/setEnabled()` interface is the boundary — swap the provider
-  guts for 3d-tiles-renderer + a Maps key, nothing outside the file changes.
-- ✅ **Arrows scale with zoom** — chevron matrices re-scale live (throttled,
-  >12% delta) as the camera moves instead of waiting for the next data refresh.
-- ✅ **Clutter filters v2** — UNDERWAY (hides anchored/moored vessels + slow
-  targets), aircraft altitude band (<10k / 10–30k / >30k ft), satellite orbit
-  band (LEO/MEO/GEO). Contact filtering now also covers MILAIR + SAT.
-- ✅ **Optimization pass** — lazy detail-row construction for vessel metas
-  (10k+ × 2 Hz of string formatting eliminated), trail rebuild throttling +
-  minimum-movement threshold (anchored-vessel jitter no longer accumulates
-  segments), reusable temp matrices in the plot loop.
+---
 
-## Phase B / C — planned (not yet built)
+## 4. Strategy from here
 
-- **Phase B — CCTV mesh + street-level** (needs two free keys): Windy Webcams API
-  for global public webcams + Mapillary open street-level imagery on click.
-- **Phase C — OSM traffic**: *shelved* by decision.
+The tool is now broad. The strategic pivot is from *breadth* (more feeds) toward
+**depth** (turning feeds into insight) and **reach** (making it runnable and
+shareable now that it's on GitHub). Four themes, roughly in priority order:
 
-## Suggested next steps
+### Theme 1 — Intelligence depth *(the differentiator)*
+Raw dots are commodity; correlated insight is not. This is where SENTINEL earns
+the "S" in OSINT.
+1. **Correlation into the LLM SITREP** — feed the already-computed cross-layer
+   context (dark ship inside a jamming zone near a conflict cluster) to the
+   report instead of counts. Cheap, immediate.
+2. **Watchlist v2** — per-entry colour + **alert-on-appear** (a watchlist contact
+   entering the plot fires an alert). Turns the passive watchlist active.
+3. **Loitering & route-anomaly** — once anchorage polygons / lane baselines are
+   sourced. Highest-value single analytic after STS.
+4. **Pattern-of-life queries** — the SQLite archive already holds days of tracks;
+   expose "every dark event in Hormuz this month" style queries + a history panel.
 
-1. **Phase B (CCTV + Mapillary)** once the two free keys are in hand.
-2. **Loitering detection (Tier 3 #9)** once anchorage polygons are sourced.
-3. **Feed correlated events into the LLM SITREP** — context exists on every
-   maritime alert; the report prompt doesn't use it yet.
-4. **Per-IP rate caps** + **Tier 4 packaging** (Tauri, Docker, scenario replay).
-5. **Google Photorealistic 3D Tiles** — drop-in provider swap in
-   `web/src/buildings.js` when a Maps Platform key (billing) is available.
+### Theme 2 — New sensors
+5. **Phase B: CCTV (Windy) + Mapillary** — imminent; ship as soon as keys land.
+6. **Opportunistic feeds** — filling the stubs (power/internet outages via
+   IODA/Cloudflare Radar; social via X API) as keys/appetite allow.
 
-## Filter backlog (brainstormed 2026-07-10, not yet built)
+### Theme 3 — Fidelity & immersion
+7. **Google Photorealistic 3D Tiles** — the `buildings.js` provider seam is ready;
+   drop in `3d-tiles-renderer` + a Maps Platform key (billing) for true
+   photorealistic cities at deep zoom.
+8. **Filter & marker polish** — work the filter backlog (§6) as clutter demands.
 
-- **Vessel class** — AIS ship-type groups (tanker 80s / cargo 70s / passenger
-  60s / fishing 30 / tug / HSC / military 35); data already on `meta.shipType`.
-- **Aircraft category** — readsb `category` (A1 light … A5 heavy, B4 glider,
-  rotorcraft) on the adsb.lol feed; "heavies only" or "rotorcraft only" cuts.
+### Theme 4 — Packaging & reach *(now that it's on GitHub)*
+9. **Contributor on-ramp** — the repo is public-ready; tighten README/SETUP for a
+   cold `git clone → npm i → npm run dev`, and confirm keyless-mode works clean.
+10. **Docker Compose one-liner** — backend + static nginx for `web/dist`.
+11. **Per-IP rate limiting** — required before any non-localhost deployment.
+12. **Tauri desktop app** — ~10 MB native shell, Node backend as sidecar.
+13. **Recorded-scenario replay** — replay a saved SQLite capture offline, for
+    demos and for contributors without live keys.
+
+### Recommended next 3 moves
+1. **Correlation → SITREP** (Theme 1.1) — a few hours, disproportionate payoff;
+   makes the fusion story real in the report.
+2. **Phase B** the moment the Windy + Mapillary keys arrive (Theme 2.5).
+3. **Watchlist v2 alert-on-appear** (Theme 1.2) — the most compelling analytic
+   that needs no new data source.
+
+---
+
+## 5. Known limitations to keep visible
+
+- **FIRMS global daily** can return sparse/header-only responses under the free
+  key's transaction limit; region-focused queries are more reliable.
+- **Bike-share `bikes` field** is null for GBFS v3 vehicle-type systems (e.g.
+  Buenos Aires); docks/capacity still populate.
+- **Private repo** can't be *opened* by Mapillary/Windy reviewers — flip to
+  public if a key request is rejected (repo is already scrubbed of secrets).
+
+---
+
+## 6. Backlog — filters & nice-to-haves
+
+- **Vessel class** — AIS ship-type groups (tanker 80s / cargo 70s / passenger /
+  fishing / tug / military 35); data on `meta.shipType`.
+- **Aircraft category** — readsb `category` (light…heavy, glider, rotorcraft).
 - **Emergency only** — squawk 7500/7600/7700 across AIR + MILAIR.
-- **Speed band** — supersonic/fast-mover cut (>600 kt) for intercept watching.
-- **Density cap** — "top N by relevance in view" (closest-to-camera or
-  biggest/fastest) instead of hard layer toggles when zoomed out.
-- **Dark-duration** — only dark ships silent > N hours (staleness slider).
-- **Constellation** — satellite owner/constellation grouping (Starlink,
-  GLONASS, GPS, military) from the TLE name prefix.
-- **Route stage** — climbing/descending/cruise via vertical-rate sign.
-- **Watchlist v2** — per-entry colour + alert-on-appear (watchlist contact
-  enters the plot → alert engine event).
+- **Speed band** — fast-mover cut (>600 kt) for intercept watching.
+- **Density cap** — "top N by relevance in view" instead of hard toggles.
+- **Dark-duration** — only ships silent > N hours.
+- **Constellation** — satellite owner grouping (Starlink / GLONASS / GPS / mil).
+- **Route stage** — climb/cruise/descent via vertical-rate sign.
+
+---
+
+## 7. Changelog (high level)
+
+- **2026-07-10** — GitHub repo initialized + pushed (private); FIRMS key moved to
+  backend proxy; directional ✈/🚁 icons + ╳ airport symbol + smaller arrows;
+  deep-zoom free-look camera + pan fix; Ollama SITREP via backend proxy;
+  per-layer style menu; Phase A (ghost trails, directional markers, military air,
+  bike share, weather radar); Phase D (3D buildings, arrow zoom-scale, clutter
+  filters v2, optimization pass).
+- **2026-07-09** — QOL wave: layer icons, contact filters, search, cartography +
+  labels, thermal context, alert management, snapshot DVR.
+- **2026-07-08** — Global AIS + NGA World Port Index; GDELT bulk-event conflict;
+  GPS jamming + denied zones; deep-zoom imagery; region-focus filtering; full
+  satellite catalog; provenance badges; contact paths; airports + METAR/TAF;
+  STS detection; cross-layer correlation; SQLite persistence; backend auth.
