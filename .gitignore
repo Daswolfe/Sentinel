@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.*tmp
+*.log
+.DS_Store
+/web/.vite/
+# runtime SQLite (server/data/wpi.json IS committed; the live DB is not)
+server/data/*.db
+server/data/*.db-wal
+server/data/*.db-shm

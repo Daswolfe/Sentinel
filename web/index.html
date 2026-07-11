@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SENTINEL — Global Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<canvas id="globe"></canvas>
+
+<header>
+  <div class="brand">SENTINEL<small>GLOBAL COMMAND CENTER · v0.5</small></div>
+  <input id="searchBox" placeholder="⌕ contact search — name / MMSI / callsign / hex" title="Enter to search vessels, aircraft, airports, satellites">
+  <select id="regionSel" title="Region focus"></select>
+  <button id="imgBtn" title="Cycle basemap: dark → HD Blue Marble (8K static) → LIVE daily MODIS">🛰 IMAGERY: OFF</button>
+  <button id="radarBtn" title="Global precipitation radar (RainViewer — fuses NOAA NEXRAD + worldwide radar), animated">⛆ RADAR</button>
+  <button id="bldgBtn" class="on" title="3D buildings at deep zoom (OSM Buildings extrusions — zoom below ~30 km over a city)">⌂ 3D</button>
+  <span id="radarTime"></span>
+  <div class="statuses" id="statuses"></div>
+  <div id="healthStrip" title="Backend feed health (from /health)"></div>
+  <div id="clock">--:--:--<small>UTC · MISSION CLOCK</small></div>
+</header>
+
+<div class="panel" id="layers"><h2>LAYERS</h2><div id="layerlist"></div>
+  <div class="filters">
+    <span>QUAKE ≥ M<b id="magVal">4.5</b></span>
+    <input type="range" id="magFilter" min="0" max="7" step="0.5" value="4.5" title="Hide earthquakes below this magnitude">
+  </div>
+  <div class="filters" id="contactFilters">
+    <select id="fNat" title="Flag state / registration country"><option value="">NAT: ANY</option></select>
+    <select id="fMil" title="Military vs civilian contacts">
+      <option value="all">MIL+CIV</option><option value="mil">MIL ONLY</option><option value="civ">CIV ONLY</option>
+    </select>
+    <label title="Only notable contacts (carriers, AF1, head-of-state…)"><input type="checkbox" id="fWatch"> NOTABLE</label>
+  </div>
+  <div class="filters" id="contactFilters2">
+    <label title="Hide anchored/moored vessels and near-stationary targets"><input type="checkbox" id="fMove"> UNDERWAY</label>
+    <select id="fAlt" title="Aircraft altitude band">
+      <option value="all">ALT: ALL</option><option value="lo">&lt;10k ft</option><option value="mid">10–30k ft</option><option value="hi">&gt;30k ft</option>
+    </select>
+    <select id="fOrbit" title="Satellite orbit band">
+      <option value="all">ORBIT: ALL</option><option value="leo">LEO</option><option value="meo">MEO</option><option value="geo">GEO</option>
+    </select>
+  </div>
+  <div class="legend">
+    <span><b class="ok">LIVE</b> real data</span>
+    <span><b class="sim">SIM</b> simulated</span>
+    <span><b class="off">OFF</b> not wired</span>
+    <span><b class="err">ERR</b> failed</span>
+    <label style="margin-left:auto;cursor:pointer"><input type="checkbox" id="lblNations" checked> NAMES</label>
+  </div>
+  <button id="reportBtn">⌁ GENERATE INTEL REPORT</button></div>
+
+<div class="panel" id="report">
+  <span class="close" onclick="document.getElementById('report').style.display='none'">✕</span>
+  <h2>INTEL REPORT — LOCAL LLM</h2><div class="body" id="reportBody"></div>
+</div>
+
+<div class="panel" id="profile">
+  <span class="close" onclick="document.getElementById('profile').style.display='none'">✕</span>
+  <h2>FLIGHT PROFILE</h2><div class="body" id="profileBody"></div>
+</div>
+
+<div class="panel" id="detail">
+  <span class="close" onclick="ui.closeDetail()">✕</span>
+  <h2>CONTACT DETAIL</h2><div class="body" id="detailBody"></div>
+</div>
+
+<div class="panel" id="alerts">
+  <h2>ALERTS · <span id="alertCount">0</span><span id="ackAll" title="Acknowledge all alerts">✓ ALL</span></h2>
+  <div class="body" id="alertList"></div>
+</div>
+
+<div class="panel" id="socint">
+  <h2>SOCINT — PLACEHOLDER</h2>
+  <div class="body">
+    <input placeholder="keyword search (X / social) — not yet wired" disabled>
+    <div class="imgrid"><div>IMG</div><div>IMG</div><div>IMG</div></div>
+    <div class="note">Future module: geolocated keyword + image capture from X and other
+      networks before deletion. Wire your bearer token in <code>CONFIG.SOCINT</code> and
+      implement <code>Adapters.socint()</code>.</div>
+  </div>
+</div>
+
+<div id="timebar">
+  <button id="liveBtn">● LIVE</button>
+  <input type="range" id="scrub" min="0" max="1000" value="1000">
+  <span id="scrubLabel">NOW</span>
+  <span class="dvrCtl" title="DVR look-back window (hours) — frames recorded once a minute to IndexedDB">
+    DVR <input id="dvrHours" type="number" min="1" max="48" step="1"> h
+  </span>
+  <button id="snapBtn" title="Download the current global picture as JSON">📷 SNAPSHOT</button>
+</div>
+
+<div id="tileCredit">ground imagery © Esri · Maxar · Earthstar Geographics</div>
+
+<footer><div class="label">LIVE FEED</div><div id="ticker">Initializing sensor grid…</div></footer>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

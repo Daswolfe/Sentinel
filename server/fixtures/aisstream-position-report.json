@@ -1,0 +1,21 @@
+{
+  "__comment": "Captured shape of a live aisstream.io PositionReport (schema verified against the real feed by verify-ais.js on 2026-07-09). If ais.js._ingest ever stops parsing this fixture, either the fixture or _ingest drifted — re-run `npm run verify-ais` online to see which.",
+  "MessageType": "PositionReport",
+  "MetaData": {
+    "MMSI": 563012345,
+    "ShipName": "SENTINEL TEST",
+    "latitude": 1.2466,
+    "longitude": 103.8303,
+    "time_utc": "2026-07-09 00:00:00.000000000 +0000 UTC"
+  },
+  "Message": {
+    "PositionReport": {
+      "Cog": 231.4,
+      "Sog": 14.2,
+      "TrueHeading": 230,
+      "NavigationalStatus": 0,
+      "Latitude": 1.2466,
+      "Longitude": 103.8303
+    }
+  }
+}
