@@ -114,11 +114,36 @@ layer never touches the core.
 
 ---
 
-## 4. Strategy from here
+## 4. Known bugs (triaged — not yet fixed)
+
+1. **Deep-zoom pan renders under the camera, not the look-at point.** With
+   free-look tilted toward the horizon, the tile-imagery and 3D-building overlays
+   follow the ground point directly *beneath* the camera, so the area you're
+   actually looking at (ahead, toward the horizon) stays unrendered. Likely fix:
+   drive `tiles.update()` / `buildings.update()` from the camera's look-at/target
+   ground point (raycast the view direction to the sphere), not the sub-camera
+   nadir point.
+2. **Alert click flies to the alert's birthplace, not the contact's current
+   position.** Alerts store lat/lon at creation, so a 7700-squawk alert jumps to
+   where the squawk *changed*, not where the aircraft is now. Likely fix:
+   re-resolve the alert to its live contact (by icao/mmsi) at click time and fly
+   to the current position; fall back to the stored point if the contact is gone.
+3. **Ship icons float above the surface at max zoom.** SEA/DARK plot at ~R+0.04
+   (a few thousand ft equivalent) — fine at global scale, visibly hovering at
+   building zoom. Likely fix: drop sea markers to hug the surface, or scale the
+   altitude offset down with camera altitude.
+4. **Inconsistent ADS-B altitude units.** Some feeds report metres, some feet;
+   values are mixed without normalization (see also units-settings feature,
+   §5 Theme 4). Fix: normalize to a canonical unit on ingest, then display per
+   the global unit setting.
+
+---
+
+## 5. Strategy from here
 
 The tool is now broad. The strategic pivot is from *breadth* (more feeds) toward
 **depth** (turning feeds into insight) and **reach** (making it runnable and
-shareable now that it's on GitHub). Four themes, roughly in priority order:
+shareable now that it's on GitHub). Four themes, roughly in priority order.
 
 ### Theme 1 — Intelligence depth *(the differentiator)*
 Raw dots are commodity; correlated insight is not. This is where SENTINEL earns
@@ -127,42 +152,76 @@ the "S" in OSINT.
    context (dark ship inside a jamming zone near a conflict cluster) to the
    report instead of counts. Cheap, immediate.
 2. **Watchlist v2** — per-entry colour + **alert-on-appear** (a watchlist contact
-   entering the plot fires an alert). Turns the passive watchlist active.
-3. **Loitering & route-anomaly** — once anchorage polygons / lane baselines are
-   sourced. Highest-value single analytic after STS.
-4. **Pattern-of-life queries** — the SQLite archive already holds days of tracks;
-   expose "every dark event in Hormuz this month" style queries + a history panel.
+   entering the plot fires an alert), and let the user **add a contact or an area
+   to the watchlist directly from the map** (right-click / detail-panel action).
+   Turns the passive watchlist active.
+3. **Tracking boxes / tripwires** — let the user **draw a box or arbitrary
+   polygon that counts entries and exits**, configurable for which classes to
+   count (ships, military aircraft, …). E.g. "how many ships transited this gate
+   of the Strait of Hormuz." Persisted, with running tallies + optional alerts on
+   crossing. Reuse the same crossing logic for **nation-airspace in/out** using
+   border polygons (§Theme 3, nation walls / boundaries share the geometry).
+4. **Surveillance-orbit detection** — flag aircraft flying a **series of circles
+   over one location** (ISR / holding-orbit signature): detect repeated heading
+   sweep-through-360° with bounded ground track over a time window. Sibling to
+   loitering; works on the track history we already store.
+5. **Loitering & route-anomaly** — vessels deviating from lanes or loitering in
+   open water, once anchorage polygons / lane baselines are sourced. Highest-value
+   maritime analytic after STS.
+6. **Dossier builder** — accrete a living **per-nation (and per-notable-entity)
+   dossier** of notable events, movements, and locations over time (Iran, Russia,
+   China, …), adding and aging out entries as appropriate. Feeds — and is fed by —
+   the LLM SITREP and the watchlist. The strategic capstone of the intelligence
+   theme.
+7. **Pattern-of-life queries** — the SQLite archive already holds days of tracks;
+   expose "every dark event in Hormuz this month"–style queries + a history panel.
 
 ### Theme 2 — New sensors
-5. **Phase B: CCTV (Windy) + Mapillary** — imminent; ship as soon as keys land.
-6. **Opportunistic feeds** — filling the stubs (power/internet outages via
+8. **Phase B: CCTV (Windy) + Mapillary** — imminent; ship as soon as keys land.
+9. **Opportunistic feeds** — filling the stubs (power/internet outages via
    IODA/Cloudflare Radar; social via X API) as keys/appetite allow.
 
-### Theme 3 — Fidelity & immersion
-7. **Google Photorealistic 3D Tiles** — the `buildings.js` provider seam is ready;
-   drop in `3d-tiles-renderer` + a Maps Platform key (billing) for true
-   photorealistic cities at deep zoom.
-8. **Filter & marker polish** — work the filter backlog (§6) as clutter demands.
+### Theme 3 — Fidelity, cartography & boundaries
+10. **Nation highlight walls** — **click a nation's name → highlight it with a
+    translucent extruded wall along its borders** (reuse the Natural Earth border
+    polygons already loaded for labels).
+11. **Maritime & airspace boundaries** — demarcation lines for **territorial
+    seas (12 nm), contiguous zone, and EEZ (200 nm)** (Natural Earth / Marine
+    Regions data), plus national airspace polygons. Shared geometry powers the
+    airspace tracking box (Theme 1.3).
+12. **GPS-jamming shape fidelity** — the affected area currently renders as a
+    **bounding circle**; replace it with a **polygon / concave hull (or per-H3-cell
+    footprint)** that traces the actual affected cells, so the shape depicts the
+    real region.
+13. **Google Photorealistic 3D Tiles** — the `buildings.js` provider seam is
+    ready; drop in `3d-tiles-renderer` + a Maps Platform key (billing) for true
+    photorealistic cities at deep zoom.
+14. **Filter & marker polish** — work the filter backlog (§7) as clutter demands.
 
-### Theme 4 — Packaging & reach *(now that it's on GitHub)*
-9. **Contributor on-ramp** — the repo is public-ready; tighten README/SETUP for a
-   cold `git clone → npm i → npm run dev`, and confirm keyless-mode works clean.
-10. **Docker Compose one-liner** — backend + static nginx for `web/dist`.
-11. **Per-IP rate limiting** — required before any non-localhost deployment.
-12. **Tauri desktop app** — ~10 MB native shell, Node backend as sidecar.
-13. **Recorded-scenario replay** — replay a saved SQLite capture offline, for
+### Theme 4 — UX, packaging & reach *(now that it's on GitHub)*
+15. **Global units settings panel** — a settings app to set units across **all**
+    layers: altitude (ft / m / flight level), speed (kt / km·h⁻¹ / mph), distance
+    (nm / km / mi), temperature (°C / °F), coordinates (DD / DMS). Normalizes the
+    mixed-unit ADS-B feeds (bug §4.4) behind one canonical internal unit.
+16. **Contributor on-ramp** — tighten README/SETUP for a cold `git clone → npm i
+    → npm run dev`; confirm keyless mode is clean.
+17. **Docker Compose one-liner** — backend + static nginx for `web/dist`.
+18. **Per-IP rate limiting** — required before any non-localhost deployment.
+19. **Tauri desktop app** — ~10 MB native shell, Node backend as sidecar.
+20. **Recorded-scenario replay** — replay a saved SQLite capture offline, for
     demos and for contributors without live keys.
 
 ### Recommended next 3 moves
 1. **Correlation → SITREP** (Theme 1.1) — a few hours, disproportionate payoff;
    makes the fusion story real in the report.
-2. **Phase B** the moment the Windy + Mapillary keys arrive (Theme 2.5).
-3. **Watchlist v2 alert-on-appear** (Theme 1.2) — the most compelling analytic
-   that needs no new data source.
+2. **Phase B** the moment the Windy + Mapillary keys arrive (Theme 2.8).
+3. **Tracking boxes** (Theme 1.3) — the most compelling *new* analytic, needs no
+   new data source, and its crossing logic is reused by airspace tracking and the
+   watchlist.
 
 ---
 
-## 5. Known limitations to keep visible
+## 6. Known limitations to keep visible
 
 - **FIRMS global daily** can return sparse/header-only responses under the free
   key's transaction limit; region-focused queries are more reliable.
@@ -173,7 +232,7 @@ the "S" in OSINT.
 
 ---
 
-## 6. Backlog — filters & nice-to-haves
+## 7. Backlog — filters & nice-to-haves
 
 - **Vessel class** — AIS ship-type groups (tanker 80s / cargo 70s / passenger /
   fishing / tug / military 35); data on `meta.shipType`.
@@ -187,8 +246,13 @@ the "S" in OSINT.
 
 ---
 
-## 7. Changelog (high level)
+## 8. Changelog (high level)
 
+- **2026-07-10 (triage)** — logged 4 known bugs (deep-zoom pan look-at, alert
+  fly-to birthplace, floating ship icons, mixed ADS-B units) and a batch of
+  requested features (tracking boxes, nation walls, maritime/airspace boundaries,
+  surveillance-orbit detection, dossier builder, watchlist-add-from-map, global
+  units settings, GPS-jamming shape fidelity).
 - **2026-07-10** — GitHub repo initialized + pushed (private); FIRMS key moved to
   backend proxy; directional ✈/🚁 icons + ╳ airport symbol + smaller arrows;
   deep-zoom free-look camera + pan fix; Ollama SITREP via backend proxy;
