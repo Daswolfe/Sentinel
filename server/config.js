@@ -53,6 +53,10 @@ export const CONFIG = {
 
   aisstreamKey: process.env.AISSTREAM_KEY || '',
 
+  // NASA FIRMS map key — injected server-side by the /firms proxy so it never
+  // ships in client source. Free key at firms.modaps.eosdis.nasa.gov.
+  firmsKey: process.env.FIRMS_MAP_KEY || '',
+
   // Local LLM (Ollama) for intel reports. The backend proxies to it so the
   // browser needs no CORS config — Ollama can keep its default localhost bind.
   llm: {

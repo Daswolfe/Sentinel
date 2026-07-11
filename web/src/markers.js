@@ -94,15 +94,88 @@ export class TrailSet {
 
 // A flat filled arrowhead in local space: nose at +Z, lying in the X–Z plane
 // (local +Y is the surface normal), so it hugs the globe pointing "forward".
+// Kept small — heading markers should read as a tick, not dominate the plot.
 export function chevronGeometry() {
   const g = new THREE.BufferGeometry();
   const v = new Float32Array([
-    0, 0, 1.0,  -0.7, 0, -0.7,  0, 0, -0.3, // left half
-    0, 0, 1.0,   0, 0, -0.3,    0.7, 0, -0.7, // right half
+    0, 0, 0.55,  -0.4, 0, -0.4,  0, 0, -0.18, // left half
+    0, 0, 0.55,   0, 0, -0.18,    0.4, 0, -0.4, // right half
   ]);
   g.setAttribute('position', new THREE.BufferAttribute(v, 3));
   g.computeVertexNormals();
   return g;
+}
+
+// A flat textured quad in the X–Z plane (nose at +Z), for icon-textured
+// directional markers (aircraft/helicopter silhouettes). UVs put the texture's
+// TOP row at +Z, so a "nose-up" drawing points along the heading.
+export function quadGeometry(s = 0.55) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+    -s, 0, -s,  s, 0, -s,  s, 0, s,
+    -s, 0, -s,  s, 0, s,  -s, 0, s,
+  ]), 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array([
+    0, 0,  1, 0,  1, 1,
+    0, 0,  1, 1,  0, 1,
+  ]), 2));
+  g.computeVertexNormals();
+  return g;
+}
+
+// Top-down white silhouettes (transparent background) pointing UP, so they
+// orient to heading once dropped on the quad. Tinted by the layer colour at
+// draw time via the material. Cached per kind.
+const _dirTexCache = new Map();
+export function directionalIconTexture(kind) {
+  if (_dirTexCache.has(kind)) return _dirTexCache.get(kind);
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff';
+  g.strokeStyle = '#fff';
+  if (kind === 'heli') {
+    g.lineCap = 'round';
+    g.lineWidth = 2.4; // rotor disc
+    g.beginPath();
+    g.arc(32, 28, 23, 0, 2 * Math.PI);
+    g.stroke();
+    g.lineWidth = 3.2; // rotor blades (cross)
+    g.beginPath();
+    g.moveTo(9, 28); g.lineTo(55, 28);
+    g.moveTo(32, 5); g.lineTo(32, 51);
+    g.stroke();
+    g.fillRect(27, 18, 10, 24); // cabin
+    g.fillRect(30, 42, 4, 15);  // tail boom
+    g.fillRect(25, 55, 14, 3);  // tail rotor
+  } else {
+    // fixed-wing jet, nose up
+    g.beginPath();
+    g.moveTo(32, 4); // nose
+    g.lineTo(37, 20);
+    g.lineTo(37, 34);
+    g.lineTo(60, 46); // right wingtip
+    g.lineTo(60, 51);
+    g.lineTo(37, 44);
+    g.lineTo(37, 52);
+    g.lineTo(46, 59); // right tailplane
+    g.lineTo(46, 61);
+    g.lineTo(32, 56);
+    g.lineTo(18, 61); // left tailplane
+    g.lineTo(18, 59);
+    g.lineTo(27, 52);
+    g.lineTo(27, 44);
+    g.lineTo(4, 51); // left wingtip
+    g.lineTo(4, 46);
+    g.lineTo(27, 34);
+    g.lineTo(27, 20);
+    g.closePath();
+    g.fill();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  _dirTexCache.set(kind, tex);
+  return tex;
 }
 
 const _Y = new THREE.Vector3(0, 1, 0);

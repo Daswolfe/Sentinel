@@ -168,6 +168,30 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // NASA FIRMS thermal anomalies — proxied so the map key stays in .env, never
+  // in client source. Passes source/box/days through; returns CSV.
+  if (url.pathname === '/firms') {
+    if (!CONFIG.firmsKey) {
+      cors(res);
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      return res.end(''); // no key → empty; the layer reports OFF
+    }
+    const source = (url.searchParams.get('source') || 'VIIRS_SNPP_NRT').replace(/[^A-Za-z0-9_]/g, '');
+    const box = url.searchParams.get('box') || '-180,-90,180,90';
+    const days = Math.min(10, Math.max(1, Number(url.searchParams.get('days')) || 1));
+    if (!/^[-\d.,]+$/.test(box)) return json(res, 400, { error: 'bad box' });
+    try {
+      const r = await fetch(
+        `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${CONFIG.firmsKey}/${source}/${box}/${days}`,
+      );
+      cors(res);
+      res.writeHead(r.status, { 'Content-Type': 'text/plain' });
+      return res.end(await r.text());
+    } catch (e) {
+      return json(res, 502, { error: String(e) });
+    }
+  }
+
   // Military aircraft — adsb.lol /v2/mil (CORS-blocked in-browser, so proxied).
   if (url.pathname === '/milair') {
     try {

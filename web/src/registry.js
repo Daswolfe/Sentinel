@@ -1,10 +1,13 @@
 import * as THREE from 'three';
 import { GLOBE_R, llToV } from './globe.js';
-import { TrailSet, chevronGeometry, arrowMatrix } from './markers.js';
+import { TrailSet, chevronGeometry, quadGeometry, directionalIconTexture, arrowMatrix } from './markers.js';
 
-// The directional-arrow icon option: a layer with `oriented:true` switches from
-// point sprites to heading-oriented chevrons when its icon picker is set to this.
+// Icons that render as heading-ORIENTED instanced markers (rotate to travel
+// direction) instead of flat point sprites, on layers with `oriented:true`:
+//   ➤ solid chevron   ✈ fixed-wing silhouette   🚁 helicopter silhouette
+export const DIRECTIONAL = { '➤': 'chevron', '✈': 'plane', '🚁': 'heli' };
 export const ARROW_ICON = '➤';
+const orientedKind = (glyph) => DIRECTIONAL[glyph] || null;
 
 const _mat4 = new THREE.Matrix4(); // reused per-instance transform (no per-plot alloc)
 
@@ -85,30 +88,41 @@ export class LayerContext {
     this.layers.set(def.id, L);
   }
 
-  // Grow (or create) a layer's arrow InstancedMesh to hold `count` markers.
+  // Grow (or create) a layer's oriented-marker InstancedMesh to hold `count`
+  // markers. Rebuilt when capacity is exceeded OR the icon kind changed
+  // (chevron ⇄ textured plane/heli need different geometry + material).
   _ensureArrow(L, count) {
-    if (L.arrow && count <= L.arrowMax) return L.arrow;
+    const kind = orientedKind(L.def.icon) || 'chevron';
+    if (L.arrow && count <= L.arrowMax && L.arrowKind === kind) return L.arrow;
     if (L.arrow) {
       this.scene.remove(L.arrow);
       L.arrow.geometry.dispose();
       L.arrow.material.dispose();
     }
     const max = Math.max(1, Math.ceil(count * 1.5));
-    const mesh = new THREE.InstancedMesh(
-      chevronGeometry(),
-      new THREE.MeshBasicMaterial({
-        color: L.def.css || L.def.color,
+    const color = L.def.css || L.def.color;
+    let geo, mat;
+    if (kind === 'chevron') {
+      geo = chevronGeometry();
+      mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, side: THREE.DoubleSide });
+    } else {
+      geo = quadGeometry();
+      mat = new THREE.MeshBasicMaterial({
+        map: directionalIconTexture(kind),
+        color,
         transparent: true,
-        opacity: 0.95,
+        alphaTest: 0.35,
+        depthWrite: false,
         side: THREE.DoubleSide,
-      }),
-      max,
-    );
+      });
+    }
+    const mesh = new THREE.InstancedMesh(geo, mat, max);
     mesh.frustumCulled = false;
     mesh.visible = L.visible;
     this.scene.add(mesh);
     L.arrow = mesh;
     L.arrowMax = max;
+    L.arrowKind = kind;
     return mesh;
   }
 
@@ -164,7 +178,7 @@ export class LayerContext {
     }
 
     // Directional-arrow render mode (heading-oriented chevrons) vs point sprites.
-    const arrowMode = L.def.oriented && L.def.icon === ARROW_ICON;
+    const arrowMode = L.def.oriented && !!orientedKind(L.def.icon);
     if (arrowMode) {
       const mesh = this._ensureArrow(L, meta.length);
       const scale = this.markerScale * (L.def.iconScale ?? 1);
@@ -265,7 +279,7 @@ export class LayerContext {
     const L = this.layers.get(id);
     if (!L) return;
     L.visible = on;
-    const arrowMode = L.def.oriented && L.def.icon === ARROW_ICON;
+    const arrowMode = L.def.oriented && !!orientedKind(L.def.icon);
     L.points.visible = on && !arrowMode;
     if (L.arrow) L.arrow.visible = on && arrowMode;
     if (L.trail) L.trail.setVisible(on);
@@ -290,11 +304,22 @@ export class LayerContext {
     c.width = c.height = 64;
     const g = c.getContext('2d');
     g.fillStyle = '#fff';
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    g.font = '52px "Segoe UI Symbol","Noto Sans Symbols",sans-serif';
-    // ︎ forces text (monochrome) presentation so the tint applies.
-    g.fillText(glyph + '︎', 32, 36);
+    if (glyph === '╳') {
+      // Airport: two crossed runways (a clearer map symbol than any font glyph).
+      g.translate(32, 32);
+      for (const ang of [Math.PI / 5, -Math.PI / 5]) {
+        g.save();
+        g.rotate(ang);
+        g.fillRect(-5, -26, 10, 52);
+        g.restore();
+      }
+    } else {
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.font = '52px "Segoe UI Symbol","Noto Sans Symbols",sans-serif';
+      // ︎ forces text (monochrome) presentation so the tint applies.
+      g.fillText(glyph + '︎', 32, 36);
+    }
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     this._iconCache.set(glyph, tex);
@@ -307,7 +332,7 @@ export class LayerContext {
     L.def.icon = glyph;
     // Directional-arrow mode is handled at plot time; re-plot so the swap
     // between points and arrows takes effect immediately.
-    if (L.def.oriented && glyph === ARROW_ICON) {
+    if (L.def.oriented && !!orientedKind(glyph)) {
       if (L.raw) this._plot(L);
       return;
     }
@@ -351,7 +376,7 @@ export class LayerContext {
     const out = [];
     for (const L of this.layers.values()) {
       if (!L.visible || !L.meta.length) continue;
-      const arrowMode = L.def.oriented && L.def.icon === ARROW_ICON;
+      const arrowMode = L.def.oriented && !!orientedKind(L.def.icon);
       if (arrowMode && L.arrow) out.push({ obj: L.arrow, L });
       else out.push({ obj: L.points, L });
     }

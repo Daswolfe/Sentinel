@@ -259,10 +259,15 @@ addEventListener('pointermove', (e) => {
       orbAz += dx * 0.006;  // rotate (yaw) around the ground point
       orbEl -= dy * 0.006;  // drag down → tilt toward the horizon (see buildings)
     } else {
-      // Left-drag pans the ground anchor across the surface.
+      // Left-drag pans the ground anchor across the surface — in SCREEN-relative
+      // directions, so "right" follows the current view yaw (orbAz) instead of
+      // always being world-east. Grab-pan: the ground follows the cursor.
+      const up = pivot.clone().normalize();
       const { east, north } = pivotFrame();
+      const h = east.clone().multiplyScalar(Math.sin(orbAz)).addScaledVector(north, Math.cos(orbAz));
+      const rightT = new THREE.Vector3().crossVectors(up, h).normalize(); // screen-right
       const pan = camDist * 0.0016;
-      pivot.addScaledVector(east, -dx * pan).addScaledVector(north, dy * pan);
+      pivot.addScaledVector(rightT, -dx * pan).addScaledVector(h, -dy * pan);
       pivot.normalize().multiplyScalar(R);
     }
   } else {
@@ -364,16 +369,17 @@ const ui = {
     const savedIcons = JSON.parse(localStorage.getItem('sentinel.layerIcons') || '{}');
     const savedSizes = JSON.parse(localStorage.getItem('sentinel.layerSizes') || '{}');
     const save = (k, o) => localStorage.setItem('sentinel.' + k, JSON.stringify(o));
-    const ICONS = ['●', '➤', '▲', '▼', '■', '◆', '✚', '✈', '⚓', '⚠'];
-    const defaultIcons = { AIR: '➤', MILAIR: '➤', SEA: '➤', DARK: '⚠' };
-    // One-time migration: the mover defaults changed to heading-oriented arrows
-    // (➤). Browsers that saved the earlier '✈'/'⚓' glyph would otherwise keep
-    // showing static, non-rotating sprites. Drop those saved values once so the
-    // new default applies; users can still re-pick per layer afterwards.
-    if (+(localStorage.getItem('sentinel.prefsV') || 0) < 2) {
-      for (const id of ['AIR', 'MILAIR', 'SEA', 'DARK']) delete savedIcons[id];
+    // ➤ chevron · ✈ plane · 🚁 heli are heading-ORIENTED (rotate to travel dir);
+    // ╳ is the airport crossed-runways symbol; the rest are static sprites.
+    const ICONS = ['●', '➤', '✈', '🚁', '╳', '▲', '▼', '■', '◆', '✚', '⚓', '⚠'];
+    const defaultIcons = { AIR: '✈', MILAIR: '✈', SEA: '➤', DARK: '⚠', APT: '╳' };
+    // One-time migration: mover/airport defaults changed to oriented silhouettes
+    // (✈) and the runway symbol (╳). Drop the superseded saved glyphs once so the
+    // new defaults apply; users can still re-pick per layer afterwards.
+    if (+(localStorage.getItem('sentinel.prefsV') || 0) < 3) {
+      for (const id of ['AIR', 'MILAIR', 'SEA', 'DARK', 'APT']) delete savedIcons[id];
       save('layerIcons', savedIcons);
-      localStorage.setItem('sentinel.prefsV', '2');
+      localStorage.setItem('sentinel.prefsV', '3');
     }
     for (const d of registry.defsList()) {
       for (const def of [d, ...(d.companions ?? [])]) {
@@ -396,7 +402,7 @@ const ui = {
               <div class="sp-row"><span>ICON</span><div class="c-icons">${ICONS.map(
                 (i) => `<button type="button" class="ic${i === icon ? ' on' : ''}" data-i="${i}">${i}</button>`,
               ).join('')}</div></div>
-              <div class="sp-row"><span>SIZE</span><input type="range" class="c-size" min="0.4" max="3" step="0.1" value="${size}"><b class="c-sizeval">${(+size).toFixed(1)}×</b></div>
+              <div class="sp-row"><span>SIZE</span><input type="range" class="c-size" min="0.2" max="3" step="0.1" value="${size}"><b class="c-sizeval">${(+size).toFixed(1)}×</b></div>
             </div>
           </details>
           <span class="name">${def.name}</span>
@@ -1467,7 +1473,7 @@ let lastArrowRescale = 0;
   // Base arrow world-size ∝ altitude so chevrons hold a roughly constant SCREEN
   // size (like the point sprites). Each layer's own iconScale is applied on top
   // in registry.rescaleArrows / _plot.
-  ctx.markerScale = Math.max(0.02, Math.min(20, alt * 0.014));
+  ctx.markerScale = Math.max(0.015, Math.min(14, alt * 0.010));
   if (now - lastArrowRescale > 150) {
     ctx.rescaleArrows();
     lastArrowRescale = now;

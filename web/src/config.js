@@ -55,7 +55,9 @@ const CONFIG = {
     refreshMs: 15 * 60e3, max: 300,
   },
   FIRMS: {      // NASA FIRMS thermal anomalies — free MAP_KEY at firms.modaps.eosdis.nasa.gov
-    MAP_KEY: "f060148d2df62e23df23a20a2b4f0aec", source: "VIIRS_SNPP_NRT", days: 1, refreshMs: 30 * 60e3,
+    // Key lives in the backend .env (FIRMS_MAP_KEY), injected by the /firms
+    // proxy — so it never ships in client source. Set FIRMS_MAP_KEY in .env.
+    url: "/api/firms", source: "VIIRS_SNPP_NRT", days: 1, refreshMs: 30 * 60e3,
     // Realistic-fire cut: the raw feed is every warm pixel on Earth (tens of
     // thousands — flares, crop burns, rooftops). Keep detections with fire
     // radiative power ≥ minFrp MW, or brightness ≥ minBright K if FRP absent.

@@ -31,15 +31,9 @@ export default {
   name: 'Thermal/Fire',
   color: 0xffd24a,
   css: '#ffd24a',
-  disabled: !CONFIG.FIRMS.MAP_KEY, // enables itself when a key is configured
-  tag: CONFIG.FIRMS.MAP_KEY ? null : 'KEY',
   interval: CONFIG.FIRMS.refreshMs,
 
   async load(ctx) {
-    if (!CONFIG.FIRMS.MAP_KEY) {
-      ctx.ui.status('FIRMS', 'off');
-      return;
-    }
     ctx.ui.status('FIRMS', 'wait');
     try {
       const bbox = ctx.region()?.bbox;
@@ -47,9 +41,15 @@ export default {
         ? `${bbox[1]},${bbox[0]},${bbox[3]},${bbox[2]}`
         : '-180,-90,180,90';
       const u =
-        `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${CONFIG.FIRMS.MAP_KEY}/` +
-        `${CONFIG.FIRMS.source}/${box}/${CONFIG.FIRMS.days}`;
-      const csv = (await (await fetch(u)).text()).trim().split('\n');
+        `${CONFIG.FIRMS.url}?source=${CONFIG.FIRMS.source}&box=${box}&days=${CONFIG.FIRMS.days}`;
+      const text = (await (await fetch(u)).text()).trim();
+      // Empty body = backend has no FIRMS_MAP_KEY set → report OFF, not error.
+      if (!text) {
+        ctx.setLayerData('FIRMS', new Float32Array(0), []);
+        ctx.ui.status('FIRMS', 'off');
+        return;
+      }
+      const csv = text.split('\n');
       const head = csv[0].split(',');
       const la = head.indexOf('latitude');
       const lo = head.indexOf('longitude');
@@ -107,6 +107,6 @@ export default {
   },
 
   onRegion(ctx) {
-    if (CONFIG.FIRMS.MAP_KEY) this.load(ctx);
+    this.load(ctx);
   },
 };
