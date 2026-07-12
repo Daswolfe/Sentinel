@@ -6,6 +6,7 @@ import { LayerContext, LayerRegistry } from './registry.js';
 import { TileOverlay } from './tiles.js';
 import { RadarOverlay } from './radar.js';
 import { BuildingsOverlay } from './buildings.js';
+import { Tripwires } from './tripwires.js';
 import { runwayDiagram } from './runways.js';
 import { FILTER, contactPasses, NAT_OPTIONS } from './contactFilters.js';
 import { textSprite } from './labels.js';
@@ -568,6 +569,86 @@ const ui = {
 window.ui = ui; // for the detail-panel close button wired in index.html
 ctx.ui = ui;
 
+/* ═══════════════ TRACKING BOXES / TRIPWIRES ═══════════════════ */
+const tripwires = new Tripwires(scene, ctx, () => renderTripwiresPanel());
+const twStatsHtml = (b) =>
+  `IN <b>${b.tallies.in}</b> · IN-TOTAL <b>${b.tallies.entries}</b> · OUT <b>${b.tallies.exits}</b>`;
+function renderTripwiresPanel() {
+  const drawing = !!tripwires.drawing;
+  document.getElementById('twDraw').style.display = drawing ? 'none' : '';
+  const bar = document.getElementById('twDrawBar');
+  bar.style.display = drawing ? '' : 'none';
+  if (drawing)
+    bar.firstChild.textContent = `Placed ${tripwires.drawing.verts.length} point(s) — keep clicking, then `;
+  const list = document.getElementById('twList');
+  if (!tripwires.boxes.length) {
+    list.innerHTML =
+      '<div class="twEmpty">No tripwires. Draw a box to count contacts entering/exiting it.</div>';
+    return;
+  }
+  list.innerHTML = tripwires.boxes
+    .map((b) => {
+      const sw = '#' + b.color.toString(16).padStart(6, '0');
+      const cls = tripwires.classList
+        .map(
+          (c) =>
+            `<label class="twc"><input type="checkbox" data-tw="${b.id}" data-cls="${c.id}" ${b.classes[c.id] ? 'checked' : ''}>${c.label}</label>`,
+        )
+        .join('');
+      return `<div class="twItem" style="border-left-color:${sw}">
+        <div class="twHead"><input class="twName" data-tw="${b.id}" value="${b.name.replace(/"/g, '&quot;')}">
+          <span class="twReset" data-tw="${b.id}" title="Reset counts">↺</span>
+          <span class="twDel" data-tw="${b.id}" title="Delete tripwire">✕</span></div>
+        <div class="twStats" id="twStats-${b.id}">${twStatsHtml(b)}</div>
+        <div class="twCls">${cls}</div></div>`;
+    })
+    .join('');
+}
+function updateTripwireStats() {
+  for (const b of tripwires.boxes) {
+    const el = document.getElementById('twStats-' + b.id);
+    if (el) el.innerHTML = twStatsHtml(b);
+  }
+}
+document.getElementById('twDraw').addEventListener('click', () => {
+  tripwires.startDraw();
+  ui.tick('Tripwire draw — click the globe to place points, then ✓ FINISH (Esc cancels)');
+});
+document.getElementById('twFinish').addEventListener('click', () => {
+  if (!tripwires.finishDraw()) ui.tick('Need at least 3 points to close a tripwire');
+});
+document.getElementById('twCancel').addEventListener('click', () => tripwires.cancelDraw());
+addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && tripwires.drawing) tripwires.cancelDraw();
+});
+const twList = document.getElementById('twList');
+twList.addEventListener('click', (e) => {
+  const id = e.target.dataset?.tw;
+  if (!id) return;
+  if (e.target.classList.contains('twDel')) tripwires.remove(id);
+  else if (e.target.classList.contains('twReset')) tripwires.reset(id);
+});
+twList.addEventListener('change', (e) => {
+  const { tw, cls } = e.target.dataset || {};
+  if (tw && cls) tripwires.toggleClass(tw, cls);
+});
+twList.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.target.classList?.contains('twName')) e.target.blur();
+});
+twList.addEventListener(
+  'blur',
+  (e) => {
+    if (e.target.classList?.contains('twName'))
+      tripwires.rename(e.target.dataset.tw, e.target.value.trim() || 'Tripwire');
+  },
+  true,
+);
+setInterval(() => {
+  tripwires.scan();
+  updateTripwireStats();
+}, 2500);
+renderTripwiresPanel();
+
 // adsbdb dossier rendering (uses the aircraft module's fetch helper)
 async function renderDossier(icao, callsign) {
   try {
@@ -648,6 +729,22 @@ function raycastPoints(e) {
 }
 
 function pick(e) {
+  // While drawing a tripwire, a globe click drops a polygon vertex (no contact
+  // pick / weather query).
+  if (tripwires.drawing) {
+    mouse.x = (e.clientX / innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / innerHeight) * 2 + 1;
+    ray.setFromCamera(mouse, camera);
+    const sh = ray.intersectObject(globeMesh);
+    if (sh.length) {
+      const p = sh[0].point.clone().normalize();
+      const lat = 90 - (Math.acos(p.y) * 180) / Math.PI;
+      let lon = (Math.atan2(p.z, -p.x) * 180) / Math.PI - 180;
+      if (lon < -180) lon += 360;
+      tripwires.addVertex(lat, lon);
+    }
+    return;
+  }
   const hit = raycastPoints(e);
   if (hit) return onPick(hit.m);
   const sphereHit = ray.intersectObject(globeMesh); // ray still set from raycastPoints
@@ -1473,7 +1570,7 @@ document.getElementById('imgBtn').addEventListener('click', cycleImagery);
 ui.init(); // build sidebar + status dots (now that Alerts/Archive exist)
 makePanels(); // panels: drag title to move, click title to collapse (persisted)
 // Dev/debug handle — inspect scene + layers from the console.
-window.__argus = { scene, camera, ctx, registry, get pivot() { return pivot; }, get camMode() { return camMode; } };
+window.__argus = { scene, camera, ctx, registry, tripwires, get pivot() { return pivot; }, get camMode() { return camMode; } };
 Alerts.armNotify();
 Archive.open();
 registry.init(); // one-time setup (aircraft trails, sea relay connection)

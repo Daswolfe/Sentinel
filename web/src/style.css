@@ -148,6 +148,29 @@
     padding:7px;border-radius:3px;cursor:pointer}
   #reportBtn:hover{background:#12222c}
   #report{left:14px;bottom:96px;width:348px;display:none}
+  /* ── tracking boxes / tripwires ───────────────────────────── */
+  #tripwires{left:262px;top:74px;width:236px}
+  #tripwires .body{padding:9px 11px;max-height:52vh;overflow-y:auto}
+  #twDraw{width:100%;background:none;border:1px solid var(--cyan);color:var(--cyan);
+    font-family:var(--disp);font-weight:600;letter-spacing:.1em;font-size:11px;padding:6px;border-radius:3px;cursor:pointer}
+  #twDraw:hover{background:#12222c}
+  #twDrawBar{font-size:10px;color:var(--amber);line-height:1.6;margin-bottom:4px}
+  .twbtn{cursor:pointer;border:1px solid var(--line);border-radius:3px;padding:1px 5px;white-space:nowrap}
+  #twFinish{color:var(--green);border-color:var(--green)}
+  #twCancel{color:var(--red);border-color:var(--red)}
+  .twEmpty{font-size:10px;color:var(--dim);line-height:1.5;padding:6px 2px}
+  .twItem{border-left:3px solid var(--dim);padding:5px 0 6px 8px;margin-top:8px;border-bottom:1px dashed #172430}
+  .twHead{display:flex;align-items:center;gap:6px}
+  .twName{flex:1;background:#0c1319;border:1px solid var(--line);color:var(--ink);
+    font-family:var(--mono);font-size:11px;padding:3px 5px;border-radius:3px;outline:none;min-width:0}
+  .twName:focus{border-color:var(--amber)}
+  .twReset,.twDel{color:var(--dim);cursor:pointer;font-size:12px}
+  .twReset:hover{color:var(--cyan)}.twDel:hover{color:var(--red)}
+  .twStats{font-size:10px;color:var(--dim);letter-spacing:.05em;margin:4px 0}
+  .twStats b{color:var(--cyan);font-weight:600}
+  .twCls{display:flex;flex-wrap:wrap;gap:4px 8px}
+  .twc{font-size:9px;color:var(--dim);letter-spacing:.06em;cursor:pointer;display:flex;align-items:center;gap:3px}
+  .twc input{accent-color:var(--amber)}
   #profile{left:14px;bottom:96px;width:348px;display:none}
   #profile .body{padding:11px 13px}
   #profile .kv{display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px dashed #172430}
