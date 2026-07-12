@@ -136,6 +136,8 @@ layer never touches the core.
    values are mixed without normalization (see also units-settings feature,
    §5 Theme 4). Fix: normalize to a canonical unit on ingest, then display per
    the global unit setting.
+6. **once a contact is selected, it cannot be unselected** let right click be for 
+   rotation around a contact, and then let left click hold and drag unselected the contact and go back to global panning and movement
 
 ---
 
@@ -166,8 +168,23 @@ the "S" in OSINT.
    sweep-through-360° with bounded ground track over a time window. Sibling to
    loitering; works on the track history we already store.
 5. **Loitering & route-anomaly** — vessels deviating from lanes or loitering in
-   open water, once anchorage polygons / lane baselines are sourced. Highest-value
-   maritime analytic after STS.
+   open water. Highest-value maritime analytic after STS. Data sources (was the
+   blocker; now chosen):
+   - *Anchorage suppression (loitering):* **Global Fishing Watch "Named
+     Anchorages"** — AIS-derived global anchorage points (~100k, named), free w/
+     attribution + account. Drops into the existing `ports.js` grid-index exactly
+     like the NGA WPI (points + radius). Sharpen key chokepoints with **OSM
+     `seamark:type=anchorage`/`anchorage_area` polygons** via the **Overpass
+     API**; **EMODnet Human Activities** anchorage/port polygons for EU waters.
+   - *Lane baseline (route-anomaly):* **roll our own density grid** from the
+     SQLite track archive we already persist (accumulate positions into ~1 km
+     cells → lanes emerge) — architecturally free, needs calendar time. For
+     instant coverage meanwhile, pull ready-made AIS density rasters: **EMODnet
+     Human Activities Vessel Density** (EU, monthly, 2017+) and **MarineCadastre.gov**
+     (NOAA/BOEM, US waters). Add **searoute** (Eurostat port-to-port routing) for
+     the "declared vs. actual route" prior later.
+   - *Verify licenses/endpoints before wiring* (GFW needs a free account +
+     attribution; EMODnet has its own license; some URLs have moved over time).
 6. **Dossier builder** — accrete a living **per-nation (and per-notable-entity)
    dossier** of notable events, movements, and locations over time (Iran, Russia,
    China, …), adding and aging out entries as appropriate. Feeds — and is fed by —
