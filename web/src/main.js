@@ -551,7 +551,7 @@ const ui = {
     document.getElementById('detail').style.display = 'none';
     clearFocusPath();
   },
-  tickItems: ['SENTINEL online — all feeds initializing'],
+  tickItems: ['ARGUS online — all feeds initializing'],
   // Routine telemetry (per-refresh counts, catalog loads). Deliberately NOT
   // in the LIVE FEED ticker — that's for significant events. Console only.
   info(msg) {
@@ -1220,7 +1220,7 @@ talks to Ollama for you):
  1. Install Ollama → https://ollama.com/download
  2. Pull the model:   ollama pull llama3.1:8b
  3. Ensure it's serving: ollama serve   (the installer usually auto-starts it)
- 4. Restart the SENTINEL backend, then click this button again.
+ 4. Restart the ARGUS backend, then click this button again.
 
 Set a different model with the OLLAMA_MODEL env var before starting the backend.`;
   } finally {
@@ -1255,7 +1255,7 @@ const Alerts = {
     Archive.put('alerts', rec);
     if (CONFIG.ALERTS.notify && 'Notification' in window && Notification.permission === 'granted')
       try {
-        new Notification('SENTINEL — ' + title, { body: msg });
+        new Notification('ARGUS — ' + title, { body: msg });
       } catch (_) {}
   },
   ack(i) {
@@ -1456,7 +1456,7 @@ document.getElementById('imgBtn').addEventListener('click', cycleImagery);
 ui.init(); // build sidebar + status dots (now that Alerts/Archive exist)
 makePanels(); // panels: drag title to move, click title to collapse (persisted)
 // Dev/debug handle — inspect scene + layers from the console.
-window.__sentinel = { scene, camera, ctx, registry, get pivot() { return pivot; }, get camMode() { return camMode; } };
+window.__argus = { scene, camera, ctx, registry, get pivot() { return pivot; }, get camMode() { return camMode; } };
 Alerts.armNotify();
 Archive.open();
 registry.init(); // one-time setup (aircraft trails, sea relay connection)

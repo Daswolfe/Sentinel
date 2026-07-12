@@ -1,4 +1,4 @@
-# SENTINEL — Roadmap & Strategy
+# ARGUS — Roadmap & Strategy
 
 An open-source 4D geospatial command center: one Three.js globe fusing live
 satellites, aircraft (civil + military), maritime AIS with dark-ship detection,
@@ -6,13 +6,13 @@ seismic, conflict, GPS-jamming, thermal, launches, airports, cities, and bike
 share — with deep-zoom imagery + 3D buildings, weather radar, a 4D time
 scrubber, an alert engine, and a local-LLM intel report.
 
-**Repo:** github.com/Daswolfe/Sentinel (private) · **Last updated:** 2026-07-10
+**Repo:** github.com/Daswolfe/Argus (private) · **Last updated:** 2026-07-10
 
 ---
 
 ## 1. Where it stands
 
-The single-file prototype is long gone. SENTINEL is a small monorepo — a
+The single-file prototype is long gone. ARGUS is a small monorepo — a
 no-framework Node backend (AIS relay, dark-ship engine, analytics, a dozen
 data proxies, optional SQLite) and a Vite + vanilla-Three.js frontend where
 every data source is a self-contained layer module behind a registry. Adding a
@@ -154,7 +154,7 @@ The tool is now broad. The strategic pivot is from *breadth* (more feeds) toward
 shareable now that it's on GitHub). Four themes, roughly in priority order.
 
 ### Theme 1 — Intelligence depth *(the differentiator)*
-Raw dots are commodity; correlated insight is not. This is where SENTINEL earns
+Raw dots are commodity; correlated insight is not. This is where ARGUS earns
 the "S" in OSINT.
 1. **Correlation into the LLM SITREP** — feed the already-computed cross-layer
    context (dark ship inside a jamming zone near a conflict cluster) to the
@@ -300,4 +300,80 @@ the "S" in OSINT.
   STS detection; cross-layer correlation; SQLite persistence; backend auth.
 
 ## 9 User Feature Request
-1. When a ship goes dark display a ring with a secondary ring that pulses from the center to the outside then repeats signifying its last known locaiton
+1. When a ship goes dark display a ring with a secondary ring that pulses from the center to the outside then repeats signifying its last known location
+
+some suggestions for optimization down the road. take with a grain of salt, it is from copilot.
+
+Large/batched JSON over websockets — server broadcast (server/index.js)
+Where: broadcast() serializes the full update then sends to every client (server/index.js: lines ~264–269 and relay → server wiring).
+Why it can hurt: with large batches (many vessels) the serialized payload is large and is sent to every client frequently (broadcastMs = 2000ms). This increases CPU (serializing), memory (big strings), network bandwidth and can create backpressure on slow clients.
+Fixes:
+Send deltas instead of full frames; keep per-client cursors or sequence deltas.
+Use binary formats (MessagePack, CBOR, or compact ArrayBuffers) for large numeric arrays.
+Limit broadcast frequency or aggregate/priority-reduce fields (strip rarely-used meta on the wire).
+Respect socket backpressure (check send callbacks / detect slow clients and drop or buffer carefully).
+Hot allocation of Float32Array / attributes on each plot — layer plotting (web/src/registry.js)
+Where: setLayerData/_plot() replaces the 'position' attribute with new Float32Array(...) and calls computeBoundingSphere (registry.js: ~132–160, ~156–158).
+Why it can hurt: creating new typed arrays per update for many layers/points creates GC pressure and frequent GPU buffer uploads; computeBoundingSphere is O(n) and expensive.
+Fixes:
+Pre-allocate a capacity BufferAttribute per layer and write into its array view, then set attribute.needsUpdate = true and update attribute.count/drawRange.
+Only call computeBoundingSphere when geometry size/extent actually changes (or compute a conservative, cached sphere).
+Reuse buffers across updates; avoid allocating new Float32Array each frame.
+Per-instance matrix updates and rescaling loops — instanced arrows (web/src/registry.js + web/src/markers.js)
+Where: _ensureArrow + arrow setMatrixAt loops and rescaleArrows recompute/ setMatrixAt for every instance (registry.js: ~91–127, ~182–219; markers.arrowMatrix: ~190–207).
+Why it can hurt: per-instance matrix computation for thousands of instances each update is CPU-heavy (math + allocations), and instanceMatrix.needsUpdate forces large GPU uploads.
+Fixes:
+Only update matrices for instances that actually moved or whose scale changed.
+Use smaller update batches or a GPU-side approach (e.g., storing per-instance data in a single typed buffer and using a shader-based rotation).
+Throttle rescale and avoid rebuilding instance matrices if change is negligible (already has a 12% threshold — you can increase or make it distance/LOD-aware).
+Trail geometry rebuild and memory churn — TrailSet (web/src/markers.js)
+Where: TrailSet.rebuild creates new Float32Array(pos) and Float32Array(col) frequently (markers.js: ~59–86).
+Why it can hurt: with many tracked contacts, rebuilding arrays and replacing geometry every rebuild causes large temporary allocations and heap churn.
+Fixes:
+Reuse a typed buffer and write into it, then set attribute.needsUpdate.
+Increase rebuild throttle for high counts, or switch to lower fidelity trails when many objects are present.
+Limit per-contact history dynamically by scale/zoom or region focus.
+Full scans of all vessels in hot loops — dark-scan/evict (server/ais.js)
+Where: _scanDark() scans all vessels every scanIntervalMs (60s) and _evict() iterates all vessels regularly (ais.js: ~185–216).
+Why it can hurt: if vessels map grows large (~tens of thousands), iterating every minute/5 minutes is O(n) work and can spike CPU. Combined with other server work this can add latency.
+Fixes:
+Keep a priority/expiry queue keyed by lastSeen so you only visit potentially-expired entries.
+Make dark-scan incremental (process a slice each tick) or schedule checks per-vessel based on lastSeen + threshold.
+Avoid repeated expensive operations inside the loop (cache Date.now once per run).
+Recomputing lat/lon and heavy math inside region filtering (web/src/registry.js)
+Where: _regionFilter recomputes lat/lon from xyz for every point, and does trigonometry for satellites (registry.js: ~225–258).
+Why it can hurt: inverse trig (sqrt, acos, atan2) per point per filtering pass is expensive at scale.
+Fixes:
+Store source lat/lon/alt in meta at load time so you can test bbox/LOS without inverting every frame.
+Use bounding-volume culling or coarse grids to prefilter points before exact tests.
+Frequent Date.now(), object creation, and small allocations in tight loops (multiple files)
+Where: TrailSet.push (markers.js), AisRelay._ingest (ais.js) pushes to arrays and constructs objects repeatedly (e.g., v.track push and shift).
+Why it can hurt: many tiny allocations and Date.now calls create GC overhead and can increase tail-latency.
+Fixes:
+Hoist Date.now to a local variable when used in loops.
+Use pooled objects or typed buffers for hot data (tracks can be compacted to Float32 + timestamps).
+Avoid frequent array.shift (O(n)) — consider circular buffers.
+UI/main-thread blocking: sync localStorage writes, DOM updates, and heavy render work (web/src/main.js)
+Where: multiple localStorage.setItem(JSON.stringify(...)) helpers are present and stringifying large objects synchronously (main.js: lines showing save functions).
+Why it can hurt: localStorage is synchronous and JSON.stringify of large objects blocks the main thread and can cause jank; heavy DOM or innerHTML updates in large loops also block frames.
+Fixes:
+Debounce/throttle localStorage writes; write to IndexedDB or Worker for large payloads.
+Batch DOM updates using DocumentFragment or requestAnimationFrame and avoid innerHTML in tight loops.
+Offload heavy computation (decoding, indexing) to Web Workers.
+Texture/geometry re-creation instead of reuse (web/src/markers.js and registry.js)
+Where: chevronGeometry(), quadGeometry(), directionalIconTexture(), and CanvasTexture creation are done on-demand; some geometries/materials are recreated when icon kind changes (markers.js: ~98–123, registry.js: ~95–127).
+Why it can hurt: repeatedly creating geometries/textures and disposing materials costs CPU and GPU resource churn.
+Fixes:
+Cache shared geometries and materials globally and reuse them across layers/instances.
+Only dispose when truly necessary.
+Network and resource storms from many auto-refresh timers (web/src/registry.js)
+Where: registry.start() calls each def.load and sets setInterval per layer if def.interval (registry.js: ~420–436).
+Why it can hurt: many layers with overlapping intervals can cause bursty network load and CPU spikes.
+Fixes:
+Stagger layer refreshes, back off under heavy load, or coordinate network requests via a central fetch queue.
+Use adaptive intervals based on visibility/region focus (don’t fetch heavy data when layer is off-screen).
+Backend: streaming proxy handling and chunk copies (server/index.js)
+Where: /llm endpoint reads upstream.body.getReader() and writes Buffer.from(value) per chunk (index.js: ~102–107).
+Why it can hurt: each chunk copy creates new Buffer object; for high throughput stream you may allocate many small buffers.
+Fixes:
+Pipe streams when possible (stream pipeline) to avoid copying, or use readable.pipeTo/writable streams API to forward bytes.

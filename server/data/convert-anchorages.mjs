@@ -1,4 +1,4 @@
-// Convert the GFW "named anchorages" CSV (166k S2 cells) into SENTINEL's compact
+// Convert the GFW "named anchorages" CSV (166k S2 cells) into ARGUS's compact
 // anchorage index: [[name, lat, lon, radiusNm], ...] — same shape as wpi.json, so
 // it drops straight into PortIndex. Cells are grouped by (label, iso3) into one
 // entry per named anchorage; radius covers the cluster extent (padded, capped).

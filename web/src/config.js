@@ -18,7 +18,7 @@ const CONFIG = {
     // Fixes: (1) free registered account + OAuth2 = 4000/day (8000 if you feed
     // ADS-B data), (2) use Region Focus mode — bounding-box pulls cost far less,
     // (3) respect the 429 backoff below.
-    // Points at the SENTINEL backend proxy, which adds the OAuth2 bearer token
+    // Points at the ARGUS backend proxy, which adds the OAuth2 bearer token
     // server-side (4000–8000 credits/day). Falls back to anonymous if the backend
     // has no OpenSky credentials set. To hit OpenSky directly instead, use:
     //   "https://opensky-network.org/api/states/all"
@@ -26,7 +26,7 @@ const CONFIG = {
     refreshMs: 60e3, regionRefreshMs: 30e3, max: 4000,
     trailMinutes: 30,   // flight-trail persistence
     // OWN-SENSOR FEED: if you run a receiver (tar1090/readsb/dump1090), point
-    // this at its JSON and SENTINEL uses YOUR antenna — zero rate limits.
+    // this at its JSON and ARGUS uses YOUR antenna — zero rate limits.
     // Typical: "http://localhost:8080/data/aircraft.json"  (see SETUP.md)
     localFeed: "",
   },

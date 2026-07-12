@@ -1,4 +1,4 @@
-# SENTINEL — Setup & Build Guide
+# ARGUS — Setup & Build Guide
 
 How to run the repo, build the ADS-B receiver that unlocks higher aircraft limits,
 and turn each optional layer from SIM/STUB into LIVE.
@@ -7,7 +7,7 @@ and turn each optional layer from SIM/STUB into LIVE.
 > walks through installing Node.js, opening a terminal, and running the commands
 > with nothing assumed. Come back here for the fuller reference once it's running.
 
-> **Design rule:** nothing here is a hard dependency. SENTINEL runs today with
+> **Design rule:** nothing here is a hard dependency. ARGUS runs today with
 > `npm install && npm run dev`, zero keys required — you just get simulated maritime
 > and rate-limited aircraft. Every step below is *additive*: it turns one more layer
 > live or removes a rate limit. Every sidebar row carries a badge showing exactly
@@ -31,8 +31,8 @@ Each step delivers a working improvement on its own.
       already does the token exchange (`server/opensky.js`); you just add the keys.
 - [ ] **3. Build the ADS-B receiver** (the hardware part — full guide below). Two
       payoffs: feeding OpenSky ≥30% uptime unlocks **8,000 pulls/day**, and you get an
-      **unlimited local feed** SENTINEL can read directly.
-- [ ] **4. Point SENTINEL at your receiver.** Set `AIR.localFeed` in
+      **unlimited local feed** ARGUS can read directly.
+- [ ] **4. Point ARGUS at your receiver.** Set `AIR.localFeed` in
       `web/src/config.js` to your tar1090 JSON URL → aircraft run with **no rate
       limit at all**.
 - [ ] **5. Get a free aisstream.io key** → add it to `.env`, restart. Live maritime
@@ -53,7 +53,7 @@ no longer a single HTML file to edit.
 
 ---
 
-## Running SENTINEL
+## Running ARGUS
 
 Prerequisites: **Node.js 18+** (includes npm). That's it.
 
@@ -87,7 +87,7 @@ GDELT bulk-event ingestion, gpsjam H3 decoding) goes through the backend.
 ## The ADS-B Receiver (Step 3)
 
 Goal: receive 1090 MHz ADS-B locally, **feed OpenSky** (to unlock 8,000 credits/day),
-and expose a **local JSON feed** for SENTINEL.
+and expose a **local JSON feed** for ARGUS.
 
 ### Hardware (~$40–70)
 - Raspberry Pi (3/4/5, or a Zero 2 W for a minimal build) + SD card + power.
@@ -145,7 +145,7 @@ your antenna sees, usually at:
 ```
 http://<pi-ip>:8080/data/aircraft.json
 ```
-Point SENTINEL at it in **`web/src/config.js`**:
+Point ARGUS at it in **`web/src/config.js`**:
 ```js
 AIR: {
   // …
@@ -246,7 +246,7 @@ correlation).
    the local server on `127.0.0.1:11434`).
 2. Pull the model: `ollama pull llama3.1:8b`
 3. Make sure it's serving (`ollama serve` if the installer didn't).
-4. Start/restart the SENTINEL backend, then click **⌁ Generate Intel Report**.
+4. Start/restart the ARGUS backend, then click **⌁ Generate Intel Report**.
 
 Pick a different model with **`OLLAMA_MODEL`** in `.env` (e.g. `llama3.2:3b`
 for speed, `qwen2.5:14b` for stronger analysis) — it's a backend setting now,
@@ -277,7 +277,7 @@ Hardware: an 8B model at 4-bit needs ~6 GB RAM (CPU works, ~20–60 s/report; an
 | Dossiers | adsbdb | click any aircraft → type/owner/route/photo |
 | Imagery | NASA GIBS + Esri World Imagery | 🛰 IMAGERY cycles OFF → HD (8K Blue Marble) → LIVE (daily MODIS); zooming below ~2,200 km drapes Esri/Maxar tiles under the camera down to building scale |
 
-**Launch Library note:** the live tier is 15 calls/hour, so SENTINEL uses the
+**Launch Library note:** the live tier is 15 calls/hour, so ARGUS uses the
 no-rate-limit **dev** endpoint (data lags slightly — fine for a schedule). For a big
 deployment, get a key and cache server-side rather than hitting them per client.
 

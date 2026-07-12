@@ -1,4 +1,4 @@
-// Live maritime client. Connects to the SENTINEL backend's websocket relay,
+// Live maritime client. Connects to the ARGUS backend's websocket relay,
 // keeps a local vessel map in sync, and hands clean arrays to the caller.
 // Pure module: no THREE / DOM dependency, so it stays testable and reusable.
 //

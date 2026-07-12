@@ -100,7 +100,7 @@ test('ingest parses the captured aisstream fixture', async () => {
   relay._ingest(fixture);
   const v = relay.vessels.get(563012345);
   assert.ok(v, 'vessel record created from fixture');
-  assert.equal(v.name, 'SENTINEL TEST');
+  assert.equal(v.name, 'ARGUS TEST');
   assert.ok(Math.abs(v.lat - 1.2466) < 1e-9 && Math.abs(v.lon - 103.8303) < 1e-9);
   assert.equal(v.sog, 14.2);
   assert.equal(v.heading, 230);

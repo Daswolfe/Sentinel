@@ -2,7 +2,7 @@
   "name": "sentinel",
   "version": "0.5.0",
   "private": true,
-  "description": "SENTINEL — open-source 4D geospatial command center (satellites, aircraft, live maritime AIS, seismic, conflict, launches).",
+  "description": "ARGUS — open-source 4D geospatial command center (satellites, aircraft, live maritime AIS, seismic, conflict, launches).",
   "type": "module",
   "workspaces": ["server", "web"],
   "scripts": {

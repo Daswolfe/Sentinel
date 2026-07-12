@@ -1,4 +1,4 @@
-# SENTINEL
+# ARGUS
 
 An open-source **4D geospatial command center**. One 3D globe fusing live
 satellites, aircraft, **maritime AIS with dark-ship detection**, seismic events,

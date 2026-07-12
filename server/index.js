@@ -196,7 +196,7 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/milair') {
     try {
       const r = await fetch('https://api.adsb.lol/v2/mil', {
-        headers: { 'User-Agent': 'SENTINEL/0.5 (github.com/sentinel)' },
+        headers: { 'User-Agent': 'ARGUS/0.5 (github.com/Daswolfe/Argus)' },
       });
       cors(res);
       res.writeHead(r.status, { 'Content-Type': 'application/json' });
@@ -286,7 +286,7 @@ relay.start();
 analytics.start();
 
 server.listen(CONFIG.port, () => {
-  console.log(`SENTINEL backend on :${CONFIG.port}`);
+  console.log(`ARGUS backend on :${CONFIG.port}`);
   console.log(`  • REST  http://localhost:${CONFIG.port}/health`);
   console.log(`  • WS    ws://localhost:${CONFIG.port}/ws`);
   console.log(

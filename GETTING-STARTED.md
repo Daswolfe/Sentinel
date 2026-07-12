@@ -1,8 +1,8 @@
-# SENTINEL — Getting Started (Beginner's Guide)
+# ARGUS — Getting Started (Beginner's Guide)
 
 This is the no-experience-required guide. It assumes you have never used a
 "terminal" or run a "command" before. Follow it top to bottom and you'll have
-SENTINEL running in your web browser.
+ARGUS running in your web browser.
 
 If a word looks unfamiliar (terminal, command, npm…), there's a plain-English
 glossary at the very bottom.
@@ -23,7 +23,7 @@ keys later and what to do if something goes wrong.
 
 ## Step 1 — Install Node.js (once)
 
-Node.js is the engine that runs SENTINEL. It's free and made by a non-profit.
+Node.js is the engine that runs ARGUS. It's free and made by a non-profit.
 
 1. Go to **https://nodejs.org** in your web browser.
 2. You'll see a big download button. Click the one labeled **"LTS"** (it stands for
@@ -128,7 +128,7 @@ Type this exactly and press Enter:
 npm install
 ```
 
-**What it does:** downloads the pieces SENTINEL needs from the internet (so you must
+**What it does:** downloads the pieces ARGUS needs from the internet (so you must
 be online for this). **This takes a few minutes** and prints a lot of text — that's
 normal.
 
@@ -141,7 +141,7 @@ see Troubleshooting if that happens.
 You only ever run `npm install` **once** (and again only if you download a new
 version of the project).
 
-### Command 2: start SENTINEL
+### Command 2: start ARGUS
 
 Type this and press Enter:
 
@@ -149,7 +149,7 @@ Type this and press Enter:
 npm run dev
 ```
 
-**What it does:** starts the two halves of SENTINEL (the "backend" and the
+**What it does:** starts the two halves of ARGUS (the "backend" and the
 "frontend"). It does **not** stop — it keeps running to keep the app alive. That's
 correct. **Leave this window open.**
 
@@ -157,7 +157,7 @@ correct. **Leave this window open.**
 
 ```
 web    ➜  Local:   http://localhost:5173/
-server SENTINEL backend on :8787
+server ARGUS backend on :8787
 ```
 
 ### Open it in your browser
@@ -177,10 +177,10 @@ The globe appears and the layers start filling in. 🎉
 
 ## Step 5 — Using it, stopping it, and starting it again
 
-**While you're using SENTINEL, leave the terminal window open.** If you close it,
+**While you're using ARGUS, leave the terminal window open.** If you close it,
 the app stops (the browser page will go blank or stop updating).
 
-**To stop SENTINEL:** click on the terminal window, then press **Ctrl + C** (hold
+**To stop ARGUS:** click on the terminal window, then press **Ctrl + C** (hold
 Ctrl, press C). On Mac it's also **Control + C** (the Control key, not Command). The
 app stops and you get your prompt back.
 
@@ -196,8 +196,8 @@ open the browser.
 
 ## Step 6 — (Optional, later) Adding keys to unlock live data
 
-SENTINEL works immediately, but some layers show simulated or limited data until you
-add free "keys" (like passwords that let SENTINEL talk to data providers). **You can
+ARGUS works immediately, but some layers show simulated or limited data until you
+add free "keys" (like passwords that let ARGUS talk to data providers). **You can
 skip this entirely and come back later.** The maritime (ships) layer is the best
 first one to make live.
 
@@ -281,7 +281,7 @@ restart, because those belong to the backend.)
 | **"npm is not recognized"** (Windows) or **"command not found: npm"** (Mac) | Node.js isn't installed yet, or the terminal opened before it finished. Restart your computer, confirm Step 1, then reopen the terminal. |
 | **`npm install` prints red text with "error" and stops** | Usually no internet, or a flaky download. Check your connection and run `npm install` again — it's safe to re-run. |
 | **The browser page is blank or says "can't connect"** | Is the `npm run dev` terminal still open and running? It must stay open. And make sure the address is exactly `http://localhost:5173`. |
-| **"Port 5173 is already in use"** (or 8787) | Another copy is already running. Close any other terminal windows running SENTINEL, or just restart your computer, then `npm run dev` again. |
+| **"Port 5173 is already in use"** (or 8787) | Another copy is already running. Close any other terminal windows running ARGUS, or just restart your computer, then `npm run dev` again. |
 | **The globe loads but some layers stay empty/amber** | That's expected for layers that need a key (Step 6) or that are marked SIM/STUB. The green dots are live; amber = simulated; grey = needs a key. |
 | **The terminal isn't in the `sentinel` folder** (commands say "cannot find package.json") | You opened the terminal in the wrong place. Redo Step 3 carefully. To check where you are, type `dir` (Windows) or `ls` (Mac) and press Enter — you should see `package.json` in the list. |
 | **I closed the terminal by accident** | No harm done. Just reopen it in the folder (Step 3) and run `npm run dev` again. |
@@ -298,7 +298,7 @@ fix is usually a quick one.
   type commands instead of clicking. On Windows the black `cmd` window; on Mac the
   Terminal app.
 - **Command:** a line of text you type and run by pressing Enter (e.g. `npm install`).
-- **Node.js:** the free engine that runs SENTINEL. Installed once in Step 1.
+- **Node.js:** the free engine that runs ARGUS. Installed once in Step 1.
 - **npm:** "Node Package Manager" — a helper that comes *with* Node.js. It's the
   `npm` at the start of the commands; it fetches the building blocks and starts the
   app.
@@ -308,9 +308,9 @@ fix is usually a quick one.
 - **Port** (the `:5173` / `:8787` numbers): like an apartment number for programs on
   your computer, so two programs don't collide. You don't need to manage these.
 - **.env file:** a small private settings file holding your keys. Created in Step 6.
-- **Key / API key:** a free password-like code that lets SENTINEL pull data from a
+- **Key / API key:** a free password-like code that lets ARGUS pull data from a
   provider (like ship positions). You paste these into `.env`.
-- **Backend / frontend:** SENTINEL has two halves. The **frontend** is the globe you
+- **Backend / frontend:** ARGUS has two halves. The **frontend** is the globe you
   see in the browser; the **backend** quietly handles live data and secrets. `npm run
   dev` starts both.
 

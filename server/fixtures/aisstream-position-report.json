@@ -3,7 +3,7 @@
   "MessageType": "PositionReport",
   "MetaData": {
     "MMSI": 563012345,
-    "ShipName": "SENTINEL TEST",
+    "ShipName": "ARGUS TEST",
     "latitude": 1.2466,
     "longitude": 103.8303,
     "time_utc": "2026-07-09 00:00:00.000000000 +0000 UTC"
