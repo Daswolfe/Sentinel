@@ -105,13 +105,13 @@ layer never touches the core.
 
 ## 3. In progress / awaiting input
 
-- **Phase B — CCTV + street-level** *(awaiting two free keys)*. Windy Webcams API
-  (global public webcams) + Mapillary (open street-level imagery on click). Code
-  design is set; blocked only on you registering the keys — the GitHub repo URL
-  now exists for those forms.
-- **Correlation → SITREP** *(small, unblocked)*. Every maritime alert already
-  carries cross-layer context; the intel-report prompt still feeds raw counts.
-  Wiring the correlated events in is the cheapest high-value win.
+- **Phase B — CCTV + street-level** *(keys in hand — next up)*. Windy Webcams API
+  (global public webcams) + Mapillary (open street-level imagery on click). Keys
+  now provisioned in `.env`; ready to build.
+- **Correlation → SITREP** ✅ *shipped 2026-07-11*. `buildSitrep()` now leads with
+  a dedicated HIGH-SIGNAL & CROSS-LAYER-CORRELATED EVENTS section (dark/STS/
+  loiter/resurface/emergency alerts + any '⚠'-marked event coinciding with a
+  GPS-denied zone / conflict cluster), ahead of the force-laydown counts.
 - **Loitering** ✅ *shipped 2026-07-11*. GFW named-anchorages CSV processed into
   `server/data/anchorages.json` (~14.7k) and merged into the port index; a
   single-vessel open-water loiter detector (≥3 h) now runs in `analytics.js`.

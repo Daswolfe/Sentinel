@@ -1135,8 +1135,25 @@ function buildSitrep() {
   const bigFires = [...fires].sort(
     (a, b) => (parseFloat(b.rows?.['FIRE POWER']) || 0) - (parseFloat(a.rows?.['FIRE POWER']) || 0),
   );
+  // Lead with the fusion: alerts that are inherently high-signal (dark ship,
+  // STS, loiter, resurface, emergency squawk) OR that the backend enriched with
+  // cross-layer context ('⚠' marker added by maritime normalizeAlert). These
+  // are the "why this matters" items the report should open on.
+  const hiSignal = Alerts.log.filter(
+    (a) => /DARK|STS|LOITER|RESURFACE|EMERGENCY/i.test(a.title) || (a.msg || '').includes('⚠'),
+  );
+  const hiText =
+    hiSignal.slice(0, 10).map((a) => `- ${a.title}: ${a.msg}`).join('\n') ||
+    '- none currently flagged';
   return `SNAPSHOT: ${new Date().toUTCString()}
 REGION FOCUS: ${regionSel.value}
+
+*** HIGH-SIGNAL & CROSS-LAYER-CORRELATED EVENTS — LEAD THE SITREP WITH THESE ***
+(dark/STS/loiter/resurface/emergency events; '⚠' marks a contact whose event
+coincides in space with a GPS-denied zone and/or a conflict cluster)
+${hiText}
+
+FORCE LAYDOWN & ENVIRONMENT:
 SATELLITES TRACKED: ${m('SAT').length}
 CIVIL AIRCRAFT ON PLOT: ${m('AIR').length}${activeRegion ? ' (region bbox)' : ''}
 MILITARY AIRCRAFT ON PLOT: ${m('MILAIR').length}
