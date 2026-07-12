@@ -154,6 +154,8 @@
   #twDraw{width:100%;background:none;border:1px solid var(--cyan);color:var(--cyan);
     font-family:var(--disp);font-weight:600;letter-spacing:.1em;font-size:11px;padding:6px;border-radius:3px;cursor:pointer}
   #twDraw:hover{background:#12222c}
+  #twNation{width:100%;margin-top:6px;background:#0c1319;border:1px solid var(--line);color:var(--cyan);
+    font-family:var(--mono);font-size:10px;letter-spacing:.06em;padding:5px 6px;border-radius:3px;cursor:pointer;outline:none}
   #twDrawBar{font-size:10px;color:var(--amber);line-height:1.6;margin-bottom:4px}
   .twbtn{cursor:pointer;border:1px solid var(--line);border-radius:3px;padding:1px 5px;white-space:nowrap}
   #twFinish{color:var(--green);border-color:var(--green)}
@@ -171,6 +173,28 @@
   .twCls{display:flex;flex-wrap:wrap;gap:4px 8px}
   .twc{font-size:9px;color:var(--dim);letter-spacing:.06em;cursor:pointer;display:flex;align-items:center;gap:3px}
   .twc input{accent-color:var(--amber)}
+  /* ── watchlist v2 ─────────────────────────────────────────── */
+  #watchlist{left:262px;top:340px;width:236px}
+  #watchlist .body{padding:9px 11px;max-height:40vh;overflow-y:auto}
+  .wlAlert{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--dim);cursor:pointer;margin-bottom:7px}
+  .wlAlert input{accent-color:var(--amber)}
+  .wlAdd{display:flex;gap:6px;margin-bottom:8px}
+  #wlInput{flex:1;background:#0c1319;border:1px solid var(--line);color:var(--ink);
+    font-family:var(--mono);font-size:10px;padding:5px 7px;border-radius:3px;outline:none;min-width:0}
+  #wlInput:focus{border-color:var(--amber)}
+  #wlAddBtn{border:1px solid var(--cyan);color:var(--cyan);border-radius:3px;padding:2px 9px;cursor:pointer;font-size:13px}
+  #wlAddBtn:hover{background:#12222c}
+  #wlList{display:flex;flex-wrap:wrap;gap:5px}
+  .wlEmpty{font-size:10px;color:var(--dim);line-height:1.5}
+  .wlChip{display:inline-flex;align-items:center;gap:5px;background:#12202b;border:1px solid var(--line);
+    border-radius:3px;padding:2px 6px;font-size:10px;color:var(--ink);letter-spacing:.04em}
+  .wlX{color:var(--dim);cursor:pointer}.wlX:hover{color:var(--red)}
+  /* add-to-watchlist button in the contact detail panel */
+  #watchBtn{display:block;width:100%;margin-top:9px;background:none;border:1px solid var(--amber);
+    color:var(--amber);font-family:var(--disp);font-weight:600;letter-spacing:.1em;font-size:10px;
+    padding:6px;border-radius:3px;cursor:pointer}
+  #watchBtn:hover{background:#1c1608}
+  #watchBtn.on{border-color:var(--green);color:var(--green)}
   #profile{left:14px;bottom:96px;width:348px;display:none}
   #profile .body{padding:11px 13px}
   #profile .kv{display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px dashed #172430}

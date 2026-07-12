@@ -8,7 +8,10 @@ import { RadarOverlay } from './radar.js';
 import { BuildingsOverlay } from './buildings.js';
 import { Tripwires } from './tripwires.js';
 import { runwayDiagram } from './runways.js';
-import { FILTER, contactPasses, NAT_OPTIONS } from './contactFilters.js';
+import {
+  FILTER, contactPasses, NAT_OPTIONS,
+  addToWatchlist, removeFromWatchlist, matchesWatchlist, watchlistTerm,
+} from './contactFilters.js';
 import { textSprite } from './labels.js';
 
 // Layer modules — each is a self-contained data source. Adding a new layer is:
@@ -177,6 +180,7 @@ const gratGrp = (function () {
 // at each country's cartographic label point.
 let coastGrp = null;
 const nationLbls = new THREE.Group();
+const nationPolys = new Map(); // NAME -> [ outerRing[[lat,lon]], … ] (decimated) — for airspace tripwires
 scene.add(nationLbls);
 fetch(CONFIG.BORDERS.url)
   .then((r) => r.json())
@@ -203,9 +207,24 @@ fetch(CONFIG.BORDERS.url)
         sp.userData = { rank: p.LABELRANK ?? p.labelrank ?? 5, base: sp.scale.clone() };
         nationLbls.add(sp);
       }
+      // Collect this nation's outer rings (decimated, [lat,lon]) for airspace
+      // tripwires — holes/enclaves ignored, which is fine for a crossing count.
+      if (name) {
+        const rings = [];
+        for (const poly of polys) {
+          const outer = poly[0];
+          if (!outer || outer.length < 4) continue;
+          const stride = Math.max(1, Math.ceil(outer.length / 250));
+          const r = [];
+          for (let i = 0; i < outer.length; i += stride) r.push([outer[i][1], outer[i][0]]);
+          if (r.length >= 3) rings.push(r);
+        }
+        if (rings.length) nationPolys.set(name, rings);
+      }
     }
     scene.add(grp);
     coastGrp = grp;
+    populateNationPicker();
     ui.info(`Cartography — ${gj.features.length} countries, full-res borders + names`);
   })
   .catch(() => ui.tick('Border basemap unavailable — wireframe mode'));
@@ -541,11 +560,25 @@ const ui = {
     const rows = Object.entries(m.rows)
       .map(([k, v]) => `<div class="kv"><b>${k}</b><span>${v ?? '—'}</span></div>`)
       .join('');
+    // Add-to-watchlist for moving contacts.
+    const CONTACT = ['AIR', 'MILAIR', 'SEA', 'DARK'].includes(m.layer);
+    const term = CONTACT ? watchlistTerm(m) : '';
+    const watching = term && FILTER.watchlist.some((w) => w.toUpperCase() === term.toUpperCase());
     document.getElementById('detailBody').innerHTML =
       `<div class="headline">${m.headline}</div>${rows}${m.html || ''}
        ${String(m.rows.SOURCE || '').includes('Simulation') ? `<div class="note">⚠ Simulated track for layout/testing — not real vessel data.</div>` : ''}
+       ${CONTACT ? `<button id="watchBtn" class="${watching ? 'on' : ''}">${watching ? '★ WATCHING — remove' : '☆ ADD TO WATCHLIST'}</button>` : ''}
        ${(m.layer === 'AIR' || m.layer === 'MILAIR') && m.icao ? `<div class="note" id="dossier">↳ Pulling dossier from adsbdb…</div>` : ''}
        ${m.layer === 'APT' && m.icao ? `<div class="note" id="metar">↳ Pulling METAR/TAF from aviationweather.gov…</div>` : ''}`;
+    if (CONTACT) {
+      document.getElementById('watchBtn').onclick = () => {
+        if (watching) removeFromWatchlist(term);
+        else { addToWatchlist(term); this.tick(`Watchlist — added “${term}”`); }
+        renderWatchlist();
+        ctx.refilterAll();
+        this.showDetail(m); // re-render the button's state
+      };
+    }
     if ((m.layer === 'AIR' || m.layer === 'MILAIR') && m.icao) renderDossier(m.icao, m.callsign);
   },
   closeDetail() {
@@ -621,6 +654,25 @@ document.getElementById('twCancel').addEventListener('click', () => tripwires.ca
 addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && tripwires.drawing) tripwires.cancelDraw();
 });
+// Airspace tripwires: pick a nation → build a tripwire from its border polygons.
+function populateNationPicker() {
+  const sel = document.getElementById('twNation');
+  if (!sel) return;
+  const names = [...nationPolys.keys()].sort((a, b) => a.localeCompare(b));
+  sel.insertAdjacentHTML(
+    'beforeend',
+    names.map((n) => `<option value="${n.replace(/"/g, '&quot;')}">${n}</option>`).join(''),
+  );
+}
+document.getElementById('twNation').addEventListener('change', (e) => {
+  const name = e.target.value;
+  e.target.value = '';
+  if (!name) return;
+  const rings = nationPolys.get(name);
+  if (!rings) return;
+  if (tripwires.addAirspace(name, rings)) ui.tick(`Airspace tripwire — ${name} (air in/out)`);
+  else ui.tick(`${name} airspace tripwire already exists`);
+});
 const twList = document.getElementById('twList');
 twList.addEventListener('click', (e) => {
   const id = e.target.dataset?.tw;
@@ -648,6 +700,66 @@ setInterval(() => {
   updateTripwireStats();
 }, 2500);
 renderTripwiresPanel();
+
+/* ═══════════════════════ WATCHLIST v2 ═════════════════════════ */
+function renderWatchlist() {
+  const list = document.getElementById('wlList');
+  if (!FILTER.watchlist.length) {
+    list.innerHTML = '<div class="wlEmpty">Empty. Add a term, or ☆ a contact from its detail panel.</div>';
+    return;
+  }
+  list.innerHTML = FILTER.watchlist
+    .map(
+      (w) =>
+        `<span class="wlChip">${w}<span class="wlX" data-w="${w.replace(/"/g, '&quot;')}" title="Remove">✕</span></span>`,
+    )
+    .join('');
+}
+document.getElementById('wlAddBtn').addEventListener('click', () => {
+  const inp = document.getElementById('wlInput');
+  if (addToWatchlist(inp.value)) {
+    inp.value = '';
+    renderWatchlist();
+    ctx.refilterAll();
+  }
+});
+document.getElementById('wlInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('wlAddBtn').click();
+});
+document.getElementById('wlList').addEventListener('click', (e) => {
+  const w = e.target.dataset?.w;
+  if (w) { removeFromWatchlist(w); renderWatchlist(); ctx.refilterAll(); }
+});
+renderWatchlist();
+
+// Alert-on-appear: fire once when a watched contact newly enters the plot.
+// Primed silently on first scan so everything already present at startup
+// doesn't trigger a wave of alerts; Alerts.fire dedups per unique contact.
+let watchSeen = new Set();
+let watchPrimed = false;
+function scanWatchlist() {
+  if (!document.getElementById('wlAlertOn').checked) { watchPrimed = false; return; }
+  const now = new Set();
+  const first = new Map();
+  for (const id of ['AIR', 'MILAIR', 'SEA', 'DARK'])
+    for (const m of ctx.metaFor(id)) {
+      if (m.lat == null || !matchesWatchlist(m)) continue;
+      const key = m.icao ?? m.mmsi ?? m.headline;
+      now.add(key);
+      if (!first.has(key)) first.set(key, m);
+    }
+  if (watchPrimed)
+    for (const key of now)
+      if (!watchSeen.has(key)) {
+        const m = first.get(key);
+        Alerts.fire('WATCHLIST', `${m.headline} entered the plot`, m.lat, m.lon, {
+          icao: m.icao, mmsi: m.mmsi,
+        });
+      }
+  watchPrimed = true;
+  watchSeen = now;
+}
+setInterval(scanWatchlist, 5000);
 
 // adsbdb dossier rendering (uses the aircraft module's fetch helper)
 async function renderDossier(icao, callsign) {

@@ -64,9 +64,19 @@
   <h2>TRIPWIRES</h2>
   <div class="body">
     <button id="twDraw">＋ DRAW TRACKING BOX</button>
+    <select id="twNation" title="Track entries/exits of a nation's airspace"><option value="">＋ AIRSPACE — pick a nation…</option></select>
     <div id="twDrawBar" style="display:none">Click the globe to place points, then
       <span id="twFinish" class="twbtn">✓ FINISH</span> <span id="twCancel" class="twbtn">✕ CANCEL</span></div>
     <div id="twList"><div class="twEmpty">No tripwires. Draw a box to count contacts entering/exiting it.</div></div>
+  </div>
+</div>
+
+<div class="panel" id="watchlist">
+  <h2>WATCHLIST</h2>
+  <div class="body">
+    <label class="wlAlert"><input type="checkbox" id="wlAlertOn" checked> Alert when a watched contact appears</label>
+    <div class="wlAdd"><input id="wlInput" placeholder="add name / callsign / MMSI / hex"><span id="wlAddBtn" title="Add">＋</span></div>
+    <div id="wlList"></div>
   </div>
 </div>
 

@@ -37,6 +37,12 @@ function pointInPoly(lat, lon, verts) {
   return inside;
 }
 
+// A box is a set of rings (one for a hand-drawn polygon; many for a nation's
+// MultiPolygon airspace). Inside = inside ANY ring (union; holes ignored — rare
+// for airspace). `verts` is the legacy single-ring shape, still supported.
+const boxRings = (b) => b.rings ?? [b.verts];
+const pointInRings = (lat, lon, rings) => rings.some((r) => pointInPoly(lat, lon, r));
+
 export class Tripwires {
   constructor(scene, ctx, onChange = () => {}) {
     this.scene = scene;
@@ -85,6 +91,26 @@ export class Tripwires {
     this.onChange();
   }
 
+  // Build an airspace tripwire from a nation's border rings ([[ [lat,lon],… ],…]).
+  addAirspace(name, rings) {
+    if (this.boxes.some((b) => b.airspace === name)) return false; // no duplicates
+    this.boxes.push({
+      id: 'tw' + Date.now(),
+      name: name + ' airspace',
+      airspace: name,
+      rings,
+      color: PALETTE[this.boxes.length % PALETTE.length],
+      classes: { SEA: false, DARK: false, AIR: true, MILAIR: true },
+      tallies: { in: 0, entries: 0, exits: 0 },
+      inside: new Set(),
+      primed: false,
+    });
+    this._save();
+    this._render();
+    this.onChange();
+    return true;
+  }
+
   /* ── config / lifecycle ──────────────────────────────────────── */
   toggleClass(boxId, cls) {
     const b = this.boxes.find((x) => x.id === boxId);
@@ -118,11 +144,12 @@ export class Tripwires {
     let crossed = false;
     for (const b of this.boxes) {
       const now = new Set();
+      const rings = boxRings(b);
       for (const cls of CLASSES) {
         if (!b.classes[cls.id]) continue;
         for (const m of this.ctx.metaFor(cls.id)) {
           if (m.lat == null) continue;
-          if (pointInPoly(m.lat, m.lon, b.verts)) now.add(m.icao ?? m.mmsi ?? m.headline);
+          if (pointInRings(m.lat, m.lon, rings)) now.add(m.icao ?? m.mmsi ?? m.headline);
         }
       }
       if (b.primed) {
@@ -145,7 +172,8 @@ export class Tripwires {
   }
   _render() {
     for (const c of [...this.group.children]) { c.geometry?.dispose(); this.group.remove(c); }
-    for (const b of this.boxes) this.group.add(this._loop(b.verts, b.color, true));
+    for (const b of this.boxes)
+      for (const ring of boxRings(b)) this.group.add(this._loop(ring, b.color, true));
     if (this.drawing && this.drawing.verts.length)
       this.group.add(this._loop(this.drawing.verts, this.drawing.color, this.drawing.verts.length > 2));
   }
@@ -157,8 +185,8 @@ export class Tripwires {
         'sentinel.tripwires',
         JSON.stringify(
           this.boxes.map((b) => ({
-            id: b.id, name: b.name, verts: b.verts, color: b.color,
-            classes: b.classes, tallies: b.tallies,
+            id: b.id, name: b.name, airspace: b.airspace, verts: b.verts, rings: b.rings,
+            color: b.color, classes: b.classes, tallies: b.tallies,
           })),
         ),
       );

@@ -125,6 +125,8 @@ function isNotable(m, watchlist) {
   return watchlist.some((w) => w && hay.includes(w.toUpperCase()));
 }
 
+const WL_KEY = 'sentinel.watchlist';
+
 // The active filter state, mutated by the UI.
 export const FILTER = {
   nat: '',
@@ -133,8 +135,43 @@ export const FILTER = {
   movingOnly: false, // hide anchored vessels / near-stationary targets
   altBand: 'all',    // aircraft: all | lo (<10k ft) | mid (10–30k) | hi (>30k)
   orbitBand: 'all',  // satellites: all | leo | meo | geo
-  watchlist: [...DEFAULT_WATCHLIST],
+  watchlist: loadWatchlist(),
 };
+
+function loadWatchlist() {
+  try {
+    const s = JSON.parse(localStorage.getItem(WL_KEY));
+    if (Array.isArray(s)) return s;
+  } catch (_) {}
+  return [...DEFAULT_WATCHLIST];
+}
+export function saveWatchlist() {
+  try { localStorage.setItem(WL_KEY, JSON.stringify(FILTER.watchlist)); } catch (_) {}
+}
+export function addToWatchlist(term) {
+  term = (term || '').trim();
+  if (!term) return false;
+  const up = term.toUpperCase();
+  if (FILTER.watchlist.some((w) => w.toUpperCase() === up)) return false;
+  FILTER.watchlist.push(term);
+  saveWatchlist();
+  return true;
+}
+export function removeFromWatchlist(term) {
+  FILTER.watchlist = FILTER.watchlist.filter((w) => w !== term);
+  saveWatchlist();
+}
+export const matchesWatchlist = (m) => isNotable(m, FILTER.watchlist);
+// The token to add when the user watches a picked contact — prefer a meaningful
+// callsign / vessel name, fall back to the hard id (hex / MMSI).
+export function watchlistTerm(m) {
+  if (!m) return '';
+  if (m.callsign && m.callsign.trim()) return m.callsign.trim();
+  if (m.icao) return String(m.icao).toUpperCase();
+  const name = (m.headline || '').replace(/^⚠ DARK — /, '').trim();
+  if (name && !/^MMSI\b/i.test(name)) return name;
+  return m.mmsi != null ? String(m.mmsi) : name;
+}
 
 const AIRBORNE = new Set(['AIR', 'MILAIR']);
 const CONTACT_LAYERS = new Set(['AIR', 'MILAIR', 'SEA', 'DARK']);
