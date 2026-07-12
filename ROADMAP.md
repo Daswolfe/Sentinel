@@ -203,6 +203,10 @@ the "S" in OSINT.
 8. **Phase B: CCTV (Windy) + Mapillary** — imminent; ship as soon as keys land.
 9. **Opportunistic feeds** — filling the stubs (power/internet outages via
    IODA/Cloudflare Radar; social via X API) as keys/appetite allow.
+   *Cloudflare Radar token is already provisioned — stored in `.env` as
+   `CLOUDFLARE_API_TOKEN` (gitignored; placeholder in `.env.example`). Wire the
+   Net Outages stub to Cloudflare Radar's outage API via a backend `/api/outages`
+   proxy that injects it, same pattern as the other proxies.*
 
 ### Theme 3 — Fidelity, cartography & boundaries
 10. **Nation highlight walls** — **click a nation's name → highlight it with a
