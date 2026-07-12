@@ -10,15 +10,21 @@ import { getConflict } from './gdelt.js';
 // transfer signature (sanctioned oil, contraband). Scanned every SCAN_MS
 // over a coarse grid so the pass stays cheap even at 30k+ vessels.
 //
-// Cross-layer correlation: when a dark/resurface/STS event fires, the caller
-// can ask correlate() whether it sits inside a GPS-denied zone or near a
+// Loitering: a SINGLE vessel stopped in open water (away from any anchorage)
+// for ≥ LOITER_MS — waiting for orders, staging, or dark-fleet holding. The
+// anchorage filter (now backed by ~14.7k GFW anchorages) is what makes this
+// precise; without it every anchored ship would false-positive.
+//
+// Cross-layer correlation: when a dark/resurface/STS/loiter event fires, the
+// caller can ask correlate() whether it sits inside a GPS-denied zone or near a
 // conflict cluster — the "why this matters" context, attached to the alert.
 
-const STOP_SOG = 0.8;      // kt — effectively stationary
-const PAIR_M = 500;        // metres between the pair
-const HOLD_MS = 25 * 60e3; // sustained this long => candidate
+const STOP_SOG = 0.8;        // kt — effectively stationary
+const PAIR_M = 500;          // metres between the pair
+const HOLD_MS = 25 * 60e3;   // STS: sustained this long => candidate
+const LOITER_MS = 3 * 3600e3; // loiter: stopped in open water this long => flag
 const SCAN_MS = 5 * 60e3;
-const MIN_REPORTS = 5;     // require a short track first
+const MIN_REPORTS = 5;       // require a short track first
 
 function distM(aLat, aLon, bLat, bLon) {
   const dLat = ((bLat - aLat) * Math.PI) / 180;
@@ -33,8 +39,9 @@ export class Analytics extends EventEmitter {
   constructor(relay) {
     super();
     this.relay = relay;
-    this.pairs = new Map(); // "mmsiA-mmsiB" -> { t0, alerted }
-    this.stats = { stsCandidates: 0, stsAlerts: 0 };
+    this.pairs = new Map();  // "mmsiA-mmsiB" -> { t0, alerted }   (STS)
+    this.loiter = new Map(); // mmsi -> { t0, alerted }            (loitering)
+    this.stats = { stsCandidates: 0, stsAlerts: 0, loiterCandidates: 0, loiterAlerts: 0 };
   }
 
   start() {
@@ -59,6 +66,30 @@ export class Analytics extends EventEmitter {
       if (ports.nearest(v.lat, v.lon)) continue; // berth/anchorage — legitimate
       stopped.push(v);
     }
+
+    // ── Loitering: a single vessel stopped in open water for ≥ LOITER_MS ──────
+    const stillHere = new Set();
+    for (const v of stopped) {
+      stillHere.add(v.mmsi);
+      let l = this.loiter.get(v.mmsi);
+      if (!l) {
+        l = { t0: now, alerted: false };
+        this.loiter.set(v.mmsi, l);
+        this.stats.loiterCandidates++;
+      }
+      if (!l.alerted && now - l.t0 >= LOITER_MS) {
+        l.alerted = true;
+        this.stats.loiterAlerts++;
+        this.emit('alert', {
+          kind: 'loiter',
+          vessel: this.relay._pub(v),
+          minutes: Math.round((now - l.t0) / 60e3),
+        });
+      }
+    }
+    // Vessel got under way (or left the feed) → clear its loiter clock.
+    for (const mmsi of this.loiter.keys()) if (!stillHere.has(mmsi)) this.loiter.delete(mmsi);
+
     // Coarse grid (~1.1 km cells); only neighbours are distance-checked.
     const CELL = 0.01;
     const grid = new Map();

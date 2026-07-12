@@ -124,20 +124,29 @@ export class PortIndex {
 }
 
 /**
- * loadPorts() — returns a PortIndex backed by the NGA World Port Index
- * (public domain, ~2,900 usable ports worldwide) plus the curated seed list,
- * whose hand-tuned anchorage radii around the chokepoints are better than the
- * WPI harbor-size heuristic. Falls back to seeds alone if the data file is
- * missing. Regenerate data/wpi.json from
- *   https://msi.nga.mil/api/publications/world-port-index?output=json
+ * loadPorts() — returns a PortIndex backed by three layered sources (each
+ * loaded best-effort; any missing file is simply skipped):
+ *   1. NGA World Port Index (data/wpi.json, ~2,900 ports, public domain).
+ *   2. GFW "named anchorages" (data/anchorages.json, ~14,700 AIS-derived
+ *      anchorages grouped from 166k S2 cells) — where ships ACTUALLY sit still,
+ *      so it catches anchorage silences the charted port list misses. This is
+ *      what makes dark-ship / STS suppression (and future loitering) accurate.
+ *   3. The curated seed list, whose hand-tuned radii around the chokepoints beat
+ *      both heuristics.
+ * Regenerate anchorages.json from the GFW named-anchorages CSV via
+ *   node server/data/convert-anchorages.mjs <gfw.csv> server/data/anchorages.json
  * (rows are [name, lat, lon, radiusNm]).
  */
-export function loadPorts() {
+function readJson(here, file) {
   try {
-    const here = dirname(fileURLToPath(import.meta.url));
-    const wpi = JSON.parse(readFileSync(join(here, 'data', 'wpi.json'), 'utf8'));
-    return new PortIndex([...wpi, ...SEED_PORTS]);
+    return JSON.parse(readFileSync(join(here, 'data', file), 'utf8'));
   } catch {
-    return new PortIndex(SEED_PORTS);
+    return [];
   }
+}
+export function loadPorts() {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const wpi = readJson(here, 'wpi.json');
+  const anchorages = readJson(here, 'anchorages.json');
+  return new PortIndex([...wpi, ...anchorages, ...SEED_PORTS]);
 }

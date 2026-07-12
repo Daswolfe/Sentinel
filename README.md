@@ -23,7 +23,8 @@ sentinel/
 │   ├── verify-ais.js   ★   run when online: checks aisstream schema vs ais.js
 │   ├── fixtures/           captured live AIS message — schema lock for tests
 │   ├── config.js           AIS boxes (global default), thresholds, auth token
-│   └── data/wpi.json       NGA World Port Index (~2,900 ports, public domain)
+│   └── data/               wpi.json (NGA ~2,900 ports) + anchorages.json
+│                           (GFW ~14,700 named anchorages, AIS-derived)
 ├── web/                    Vite frontend (vanilla JS — Three.js is imperative,
 │   ├── index.html          so no React tax)
 │   ├── vite.config.js      dev proxy: /api + /ws → backend
@@ -178,12 +179,13 @@ drifted so you fix `_ingest()` in one place instead of debugging blind.
   how long it was dark and how far it jumped (great-circle nm).
 - **Suppresses false positives with a ports/anchorages filter** (`ports.js`):
   a vessel that goes quiet within range of a known port or anchorage is *not*
-  flagged, because berthing/anchoring silence is legitimate. Backed by the **NGA
-  World Port Index** (~2,900 ports worldwide, public domain, shipped in
-  `server/data/wpi.json`) plus a curated seed list with hand-tuned anchorage radii
-  around the chokepoints, all indexed on a coarse spatial grid for fast lookup.
-  The `/health` endpoint reports how many flags were raised vs. suppressed so you
-  can tune the thresholds.
+  flagged, because berthing/anchoring silence is legitimate. Backed by **~17.7k
+  anchorages/ports**: the NGA **World Port Index** (~2,900, public domain,
+  `server/data/wpi.json`) **+ Global Fishing Watch named anchorages** (~14,700,
+  AIS-derived — where ships *actually* sit still — grouped from 166k S2 cells into
+  `server/data/anchorages.json`) + a curated chokepoint seed list, all indexed on
+  a coarse spatial grid for fast lookup. The `/health` endpoint reports how many
+  flags were raised vs. suppressed so you can tune the thresholds.
 - **Batches** position updates every 2 s and pushes them (plus immediate alerts)
   to all connected browsers. Late-joiners get a full snapshot on connect.
 
@@ -193,6 +195,9 @@ Tunable knobs (`config.js` → `ais`): `underwaySog`, `darkThresholdMin`,
 ### Analytics on top of the picture (`server/analytics.js`)
 - **STS-transfer candidates**: two vessels stopped (≤ 0.8 kt), ≤ 500 m apart, away
   from any port/anchorage, holding ≥ 25 min → alert with separation + hold time.
+- **Loitering**: a single vessel stopped in open water (anchorage-filtered) for
+  ≥ 3 h → alert. The GFW anchorage index above is what keeps this from firing on
+  every legitimately anchored ship.
 - **Cross-layer correlation**: every maritime alert is enriched before broadcast —
   is the event inside/near a GPS-denied zone? are there conflict clusters within
   250 km? The context rides on the alert text in the UI.

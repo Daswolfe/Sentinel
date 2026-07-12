@@ -131,6 +131,16 @@ function normalizeAlert(msg) {
       kind: 'dark',
     };
   }
+  if (msg.kind === 'loiter') {
+    return {
+      title: 'LOITERING VESSEL',
+      msg: `${who} stationary ${(msg.minutes / 60).toFixed(1)} h in open water${ctxNote}`,
+      lat: v.lat,
+      lon: v.lon,
+      mmsi: v.mmsi,
+      kind: 'loiter',
+    };
+  }
   if (msg.kind === 'sts') {
     const w = msg.vessel2 || {};
     return {

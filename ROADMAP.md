@@ -65,10 +65,14 @@ layer never touches the core.
 
 ### Backend & analytics
 - **AIS relay + dark-ship engine** — dedup, underway→silent detection, resurface
-  (dark-minutes + jump nm), NGA World Port Index (~2,900 ports) false-positive
-  suppression.
+  (dark-minutes + jump nm). False-positive suppression backed by ~17.7k
+  anchorages/ports: NGA World Port Index (~2,900) **+ GFW named anchorages
+  (~14,700, AIS-derived** from 166k S2 cells) + curated chokepoint seeds.
 - **STS-transfer detection** (`analytics.js`) — stationary pairs ≤500 m, away
-  from port, ≥25 min → alert.
+  from any anchorage, ≥25 min → alert.
+- **Loitering detection** (`analytics.js`) — a single vessel stationary in open
+  water (anchorage-filtered) ≥3 h → alert. The GFW anchorage index is what makes
+  this precise.
 - **Cross-layer correlation** — maritime alerts enriched server-side with nearby
   GPS-denied zones / conflict clusters before broadcast.
 - **Proxies (keeps secrets + dodges CORS)** — OpenSky states/track, gpsjam,
@@ -108,9 +112,12 @@ layer never touches the core.
 - **Correlation → SITREP** *(small, unblocked)*. Every maritime alert already
   carries cross-layer context; the intel-report prompt still feeds raw counts.
   Wiring the correlated events in is the cheapest high-value win.
-- **Loitering / route-anomaly** *(blocked on data)*. Needs OSM anchorage polygons
-  or a learned shipping-lane baseline first, or it false-positives on every
-  legitimate anchorage.
+- **Loitering** ✅ *shipped 2026-07-11*. GFW named-anchorages CSV processed into
+  `server/data/anchorages.json` (~14.7k) and merged into the port index; a
+  single-vessel open-water loiter detector (≥3 h) now runs in `analytics.js`.
+- **Route-anomaly** *(still blocked on lane baseline)*. Needs the learned density
+  grid from the SQLite track archive, or EMODnet/MarineCadastre density rasters —
+  loitering was the anchorage half; this is the lane half.
 
 ---
 
@@ -264,6 +271,9 @@ the "S" in OSINT.
 
 ## 8. Changelog (high level)
 
+- **2026-07-11** — GFW named anchorages (~14.7k) integrated into the port index
+  (dark-ship + STS suppression now far more accurate); single-vessel **loitering
+  detection** (≥3 h open-water) added to `analytics.js`; health strip shows LTR.
 - **2026-07-11** — fixed all 5 triaged bugs: deep-zoom look-at rendering, alert
   fly-to-live-position, floating ship icons, ADS-B unit normalization (feet), and
   contact select/deselect (right-drag rotate, left-drag release).
@@ -284,3 +294,6 @@ the "S" in OSINT.
   GPS jamming + denied zones; deep-zoom imagery; region-focus filtering; full
   satellite catalog; provenance badges; contact paths; airports + METAR/TAF;
   STS detection; cross-layer correlation; SQLite persistence; backend auth.
+
+## 9 User Feature Request
+1. When a ship goes dark display a ring with a secondary ring that pulses from the center to the outside then repeats signifying its last known locaiton

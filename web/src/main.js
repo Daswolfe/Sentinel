@@ -613,7 +613,7 @@ async function pollHealth() {
     el.textContent =
       `AIS ${(h.ais?.tracked ?? 0).toLocaleString()} · ` +
       `DARK ${s.darkFlagged ?? 0}⚑ ${s.darkSuppressed ?? 0}⌀ · ` +
-      `STS ${h.analytics?.stsAlerts ?? 0} · ` +
+      `STS ${h.analytics?.stsAlerts ?? 0} · LTR ${h.analytics?.loiterAlerts ?? 0} · ` +
       `SKY ${h.opensky?.authed ? '✓' : '✗'}${h.db ? ' · DB ✓' : ''}`;
     el.classList.remove('down');
   } catch {
