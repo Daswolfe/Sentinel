@@ -8,19 +8,6 @@ reports.
 
 ---
 
-## Why this is a repo now, not one HTML file
-
-The single-file prototype was great for zero-friction iteration, but it can't:
-
-- **hold secrets** — an aisstream or OpenSky key in client code is a public key;
-- **keep a websocket alive** — live AIS is a persistent stream, not a poll;
-- **do stateful detection** — dark-ship tracking needs server-side memory that
-  survives browser refreshes and reconnects;
-- **manage dependencies, build, or be tested** — no bundler, everything global.
-
-So SENTINEL is a small monorepo:
-
-```
 sentinel/
 ├── server/                 Node backend (no framework, minimal deps)
 │   ├── index.js            HTTP (health, /opensky[/track], /ais/snapshot|track,

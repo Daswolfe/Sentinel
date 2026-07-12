@@ -42,6 +42,7 @@ let camMovedAt = 0; // last camera change — tile overlay waits for it to settl
 // is height above its horizon — so dragging left/right pivots smoothly
 // around the contact and can never swing the camera under the terrain.
 const pivot = new THREE.Vector3(0, 0, 0);
+const _camFwd = new THREE.Vector3(); // reused: camera forward for look-at raycast
 let orbAz = 0, orbEl = 0.55; // local-frame angles while orbiting a pivot
 // Camera modes:
 //   'globe'  — orbit the globe centre, look straight down (default map view)
@@ -252,8 +253,18 @@ addEventListener('pointermove', (e) => {
   moved += Math.abs(dx) + Math.abs(dy);
   const right = btn === 2;
   if (camMode === 'object') {
-    orbAz += dx * 0.006; // any drag swivels around a focused object
-    orbEl += dy * 0.006;
+    if (right) {
+      orbAz += dx * 0.006; // right-drag swivels around the focused contact
+      orbEl += dy * 0.006;
+    } else {
+      // Left-drag DESELECTS the contact and hands control back to the globe,
+      // applying this drag as the first bit of global rotation.
+      exitToGlobe();
+      const dragScale = Math.min(1, (camDist - R) / 220);
+      camTheta += dx * 0.005 * dragScale;
+      camPhi -= dy * 0.005 * dragScale;
+      ui.tick('Contact released — globe view');
+    }
   } else if (camMode === 'ground') {
     if (right) {
       orbAz += dx * 0.006;  // rotate (yaw) around the ground point
@@ -320,7 +331,7 @@ canvas.addEventListener('dblclick', (e) => {
     orbEl = Math.asin(Math.max(-1, Math.min(1, u.dot(up))));
     orbAz = Math.atan2(u.dot(east), u.dot(north));
     camDist = Math.min(d, 1.2);
-    ui.tick(`Orbit focus — ${hit.m.headline} · double-click empty space to release`);
+    ui.tick(`Orbit focus — ${hit.m.headline} · right-drag rotate · left-drag release`);
   } else {
     // Release: hand the view back to the globe frame where the camera sits.
     exitToGlobe();
@@ -471,8 +482,13 @@ const ui = {
       if (e.target.classList.contains('aDel')) return Alerts.remove(i);
       const a = Alerts.log[i];
       if (a?.lat != null) {
-        flyTo(a.lat, a.lon, R + 0.25); // dive to max zoom on the alert location
-        this.tick(`Camera on alert — ${a.title} @ ${a.lat.toFixed(2)}°, ${a.lon.toFixed(2)}°`);
+        // Prefer the contact's LIVE position over the alert's birthplace.
+        const live = liveContactPos(a.ref);
+        const lat = live?.lat ?? a.lat, lon = live?.lon ?? a.lon;
+        flyTo(lat, lon, R + 0.25); // dive to max zoom
+        this.tick(
+          `Camera on alert — ${a.title} @ ${lat.toFixed(2)}°, ${lon.toFixed(2)}°${live ? ' (live)' : ''}`,
+        );
       }
     });
     document.getElementById('ackAll').addEventListener('click', () => Alerts.ackAll());
@@ -890,6 +906,24 @@ function flyTo(lat, lon, dist = 190) {
   };
 }
 
+// Resolve an alert's contact to its CURRENT position. Alerts are fired where the
+// event happened (e.g. where a 7700 squawk began), but the contact has since
+// moved — so re-find it live by icao/mmsi. Returns {lat,lon} or null if gone.
+function liveContactPos(ref) {
+  if (!ref) return null;
+  if (ref.icao) {
+    for (const id of ['AIR', 'MILAIR'])
+      for (const m of ctx.metaFor(id))
+        if (m.icao === ref.icao && m.lat != null) return { lat: m.lat, lon: m.lon };
+  }
+  if (ref.mmsi != null) {
+    for (const id of ['SEA', 'DARK'])
+      for (const m of ctx.metaFor(id))
+        if (m.mmsi === ref.mmsi && m.lat != null) return { lat: m.lat, lon: m.lon };
+  }
+  return null;
+}
+
 const regionSel = document.getElementById('regionSel');
 Object.keys(REGIONS).forEach((k) => regionSel.insertAdjacentHTML('beforeend', `<option>${k}</option>`));
 regionSel.addEventListener('change', () => {
@@ -1207,11 +1241,13 @@ const Alerts = {
       } catch (_) {}
     }
   },
-  fire(title, msg, lat, lon) {
+  fire(title, msg, lat, lon, ref) {
     const key = title + '|' + msg;
     if (this.seen.has(key)) return;
     this.seen.add(key);
-    const rec = { title, msg, lat, lon, t: Date.now() };
+    // `ref` ({icao} or {mmsi}) lets a click re-resolve to the contact's live
+    // position instead of where the alert was born.
+    const rec = { title, msg, lat, lon, ref, t: Date.now() };
     this.log.unshift(rec);
     if (this.log.length > 60) this.log.pop();
     ui.tick(`⚠ ${title} — ${msg}`);
@@ -1238,7 +1274,9 @@ const Alerts = {
     for (const mm of meta) {
       const sq = mm.rows.SQUAWK;
       if (['7500', '7600', '7700'].includes(sq))
-        this.fire('EMERGENCY SQUAWK', `${mm.headline} squawking ${sq}`, mm.lat ?? null, mm.lon ?? null);
+        this.fire('EMERGENCY SQUAWK', `${mm.headline} squawking ${sq}`, mm.lat ?? null, mm.lon ?? null, {
+          icao: mm.icao,
+        });
     }
   },
   checkQuake(q) {
@@ -1457,8 +1495,19 @@ let lastArrowRescale = 0;
   // while orbiting a focused object too.
   const cr = camera.position.length();
   if (Date.now() - camMovedAt > 250) {
-    const lat = 90 - (Math.acos(camera.position.y / cr) * 180) / Math.PI;
-    let lon = (Math.atan2(camera.position.z, -camera.position.x) * 180) / Math.PI - 180;
+    // Drive the tile/building overlays from the point the camera is LOOKING at
+    // (screen-centre ray → sphere), not the point directly beneath it — else a
+    // tilted free-look view renders the ground under your feet, not the scene
+    // ahead. Falls back to the nadir when the view misses the globe (horizon/sky).
+    _camFwd.set(0, 0, -1).applyQuaternion(camera.quaternion);
+    const b = camera.position.dot(_camFwd);
+    const disc = b * b - (camera.position.lengthSq() - R * R);
+    const gp =
+      disc >= 0
+        ? camera.position.clone().addScaledVector(_camFwd, -b - Math.sqrt(disc))
+        : camera.position.clone().normalize().multiplyScalar(R);
+    const lat = 90 - (Math.acos(Math.max(-1, Math.min(1, gp.y / R))) * 180) / Math.PI;
+    let lon = (Math.atan2(gp.z, -gp.x) * 180) / Math.PI - 180;
     if (lon < -180) lon += 360;
     tiles.update(lat, lon, cr - R);
     buildings.update(lat, lon, cr - R);

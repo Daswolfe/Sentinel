@@ -10,3 +10,4 @@ dist/
 server/data/*.db
 server/data/*.db-wal
 server/data/*.db-shm
+named_anchorages_v2_pipe_v3_202601.csv

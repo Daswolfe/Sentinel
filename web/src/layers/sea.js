@@ -76,7 +76,7 @@ function plotLive(ctx, vessels, dark) {
   const spos = new Float32Array(vessels.length * 3);
   const smeta = [];
   vessels.forEach((v, i) => {
-    const p = ctx.llToV(v.lat, v.lon, ctx.R + 0.04);
+    const p = ctx.llToV(v.lat, v.lon, ctx.R + 0.0015);
     spos[i * 3] = p.x;
     spos[i * 3 + 1] = p.y;
     spos[i * 3 + 2] = p.z;
@@ -87,7 +87,7 @@ function plotLive(ctx, vessels, dark) {
   const dpos = new Float32Array(dark.length * 3);
   const dmeta = [];
   dark.forEach((v, i) => {
-    const p = ctx.llToV(v.lat, v.lon, ctx.R + 0.045);
+    const p = ctx.llToV(v.lat, v.lon, ctx.R + 0.002);
     dpos[i * 3] = p.x;
     dpos[i * 3 + 1] = p.y;
     dpos[i * 3 + 2] = p.z;
@@ -138,7 +138,7 @@ function simulate(ctx) {
   const pos = new Float32Array(live.length * 3);
   const meta = [];
   live.forEach((o, i) => {
-    const p = ctx.llToV(o.lat, o.lon, ctx.R + 0.04);
+    const p = ctx.llToV(o.lat, o.lon, ctx.R + 0.0015);
     pos[i * 3] = p.x;
     pos[i * 3 + 1] = p.y;
     pos[i * 3 + 2] = p.z;
@@ -161,7 +161,7 @@ function simulate(ctx) {
   const dpos = new Float32Array(simDark.length * 3);
   const dmeta = [];
   simDark.forEach((d, i) => {
-    const p = ctx.llToV(d.lat, d.lon, ctx.R + 0.045);
+    const p = ctx.llToV(d.lat, d.lon, ctx.R + 0.002);
     dpos[i * 3] = p.x;
     dpos[i * 3 + 1] = p.y;
     dpos[i * 3 + 2] = p.z;
@@ -216,7 +216,7 @@ export default {
         CONFIG.SEA.live = true;
         plotLive(ctx, vessels, dark);
       },
-      onAlert: (a) => ctx.alerts.fire(a.title, a.msg, a.lat, a.lon),
+      onAlert: (a) => ctx.alerts.fire(a.title, a.msg, a.lat, a.lon, a.mmsi != null ? { mmsi: a.mmsi } : null),
       onStatus: (s) => {
         if (s === 'ok') {
           ctx.ui.status('SEA', 'ok');

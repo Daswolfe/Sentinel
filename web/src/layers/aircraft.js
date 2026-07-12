@@ -110,7 +110,9 @@ export default {
             ORIGIN: s[2] || '—',
             LAT: lat.toFixed(2) + '°',
             LON: lon.toFixed(2) + '°',
-            ALT: (alt * 1000).toFixed(0) + ' m',
+            // Canonical display unit = feet (OpenSky reports metres; normalized
+            // here so all aircraft feeds read consistently, matching altFt).
+            ALT: Math.round(alt * 3280.84).toLocaleString() + ' ft',
             GS: s[9] != null ? (s[9] * 1.944).toFixed(0) + ' kt' : '—',
             HDG: s[10] != null ? s[10].toFixed(0) + '°' : '—',
             SQUAWK: s[14] || '—',

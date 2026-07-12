@@ -114,30 +114,29 @@ layer never touches the core.
 
 ---
 
-## 4. Known bugs (triaged — not yet fixed)
+## 4. Known bugs
 
-1. **Deep-zoom pan renders under the camera, not the look-at point.** With
-   free-look tilted toward the horizon, the tile-imagery and 3D-building overlays
-   follow the ground point directly *beneath* the camera, so the area you're
-   actually looking at (ahead, toward the horizon) stays unrendered. Likely fix:
-   drive `tiles.update()` / `buildings.update()` from the camera's look-at/target
-   ground point (raycast the view direction to the sphere), not the sub-camera
-   nadir point.
-2. **Alert click flies to the alert's birthplace, not the contact's current
-   position.** Alerts store lat/lon at creation, so a 7700-squawk alert jumps to
-   where the squawk *changed*, not where the aircraft is now. Likely fix:
-   re-resolve the alert to its live contact (by icao/mmsi) at click time and fly
-   to the current position; fall back to the stored point if the contact is gone.
-3. **Ship icons float above the surface at max zoom.** SEA/DARK plot at ~R+0.04
-   (a few thousand ft equivalent) — fine at global scale, visibly hovering at
-   building zoom. Likely fix: drop sea markers to hug the surface, or scale the
-   altitude offset down with camera altitude.
-4. **Inconsistent ADS-B altitude units.** Some feeds report metres, some feet;
-   values are mixed without normalization (see also units-settings feature,
-   §5 Theme 4). Fix: normalize to a canonical unit on ingest, then display per
-   the global unit setting.
-6. **once a contact is selected, it cannot be unselected** let right click be for 
-   rotation around a contact, and then let left click hold and drag unselected the contact and go back to global panning and movement
+*All triaged bugs below fixed 2026-07-11.*
+
+1. ✅ **FIXED — Deep-zoom pan rendered under the camera, not the look-at point.**
+   `tiles.update()` / `buildings.update()` now derive their centre from the
+   camera's look-at ground point (screen-centre ray → sphere, nadir fallback on a
+   horizon/sky miss), so a tilted free-look view renders the scene ahead.
+2. ✅ **FIXED — Alert click flew to the alert's birthplace.** Alerts now carry a
+   `ref` ({icao}/{mmsi}); clicking re-resolves the contact's **live** position via
+   `liveContactPos()` and dives there, falling back to the stored point if the
+   contact is gone. Wired for emergency squawks (aircraft) and dark/STS/resurface
+   (vessels).
+3. ✅ **FIXED — Ship icons floated above the surface at max zoom.** SEA/DARK plot
+   dropped from R+0.04 (~2.5 km) to R+0.0015 / R+0.002 (~100 m, just above the
+   tile overlay) — they now hug the water at building zoom.
+4. ✅ **FIXED — Inconsistent ADS-B altitude units.** Feet is now the canonical
+   unit: internal `altFt` was already normalized; the OpenSky detail-panel display
+   (previously metres) now reads feet like the adsb.lol / local-receiver paths.
+   *(A global units settings panel — §5 Theme 4 — remains for user-selectable units.)*
+5. ✅ **FIXED — A selected contact could not be unselected.** In object-orbit mode,
+   **right-drag** now swivels around the contact and **left-drag deselects** it and
+   returns to global pan/movement (double-click empty space still releases too).
 
 ---
 
@@ -265,6 +264,9 @@ the "S" in OSINT.
 
 ## 8. Changelog (high level)
 
+- **2026-07-11** — fixed all 5 triaged bugs: deep-zoom look-at rendering, alert
+  fly-to-live-position, floating ship icons, ADS-B unit normalization (feet), and
+  contact select/deselect (right-drag rotate, left-drag release).
 - **2026-07-10 (triage)** — logged 4 known bugs (deep-zoom pan look-at, alert
   fly-to birthplace, floating ship icons, mixed ADS-B units) and a batch of
   requested features (tracking boxes, nation walls, maritime/airspace boundaries,

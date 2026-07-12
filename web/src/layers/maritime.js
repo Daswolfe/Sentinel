@@ -127,6 +127,7 @@ function normalizeAlert(msg) {
       msg: `${who} went silent while underway${ctxNote}`,
       lat: v.lat,
       lon: v.lon,
+      mmsi: v.mmsi,
       kind: 'dark',
     };
   }
@@ -137,6 +138,7 @@ function normalizeAlert(msg) {
       msg: `${who} + ${w.name || 'MMSI ' + w.mmsi} stationary ${msg.meters} m apart ~${msg.minutes} min, open water${ctxNote}`,
       lat: v.lat,
       lon: v.lon,
+      mmsi: v.mmsi,
       kind: 'sts',
     };
   }
