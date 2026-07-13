@@ -130,6 +130,7 @@ function cluster(cells) {
       lat: +lat.toFixed(3),
       lon: +lon.toFixed(3),
       radiusKm: Math.round(Math.max(...g.map((c) => distKm(centroid, c))) + HEX_KM),
+      hull: zoneHull(g, centroid), // [[lat,lon]…] — the real affected footprint
       cells: g.length,
       maxPct: Math.max(...g.map((c) => c.pct)),
       avgPct: +(g.reduce((s, c) => s + c.pct, 0) / g.length).toFixed(1),
@@ -138,6 +139,40 @@ function cluster(cells) {
   }
   zones.sort((a, b) => b.cells - a.cells);
   return { zones, singles };
+}
+
+// Convex hull (monotone chain) of the cluster's cell centroids, padded outward
+// by ~one hex so the polygon encloses the cells rather than clipping their
+// centres. Traces elongated fields (Ukraine front, Hormuz) far better than a
+// bounding circle. Returns a closed-able ring of [lat, lon].
+function zoneHull(cells, centroid) {
+  const P = cells.map((c) => [c.lon, c.lat]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = [];
+  for (const p of P) {
+    while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop();
+    lo.push(p);
+  }
+  const up = [];
+  for (let i = P.length - 1; i >= 0; i--) {
+    const p = P[i];
+    while (up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop();
+    up.push(p);
+  }
+  lo.pop();
+  up.pop();
+  const hull = lo.concat(up); // [lon,lat] CCW
+  const padDeg = HEX_KM / 111.2;
+  const kx = Math.max(Math.cos((centroid.lat * Math.PI) / 180), 0.2);
+  return hull.map(([lon, lat]) => {
+    const dLat = lat - centroid.lat;
+    const dLon = (lon - centroid.lon) * kx;
+    const len = Math.hypot(dLat, dLon) || 1;
+    return [
+      +(lat + (dLat / len) * padDeg).toFixed(3),
+      +(lon + (dLon / len) * padDeg / kx).toFixed(3),
+    ];
+  });
 }
 
 export async function getJamming(minPct = DEFAULT_MIN_PCT, minAircraft = DEFAULT_MIN_AIRCRAFT) {

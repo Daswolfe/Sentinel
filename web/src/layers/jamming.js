@@ -45,15 +45,20 @@ export default {
   },
 
   _ring(ctx, zone) {
-    const rDeg = zone.radiusKm / 111.2;
-    const latR = (zone.lat * Math.PI) / 180;
-    const stretch = 1 / Math.max(Math.cos(latR), 0.2);
-    const pts = [];
-    for (let i = 0; i <= 64; i++) {
-      const a = (i / 64) * 2 * Math.PI;
-      pts.push(
-        ctx.llToV(zone.lat + rDeg * Math.cos(a), zone.lon + rDeg * Math.sin(a) * stretch, ctx.R + 0.15),
-      );
+    let pts;
+    if (zone.hull?.length >= 3) {
+      // Accurate footprint: trace the affected-cell hull polygon (closed).
+      pts = zone.hull.map(([lat, lon]) => ctx.llToV(lat, lon, ctx.R + 0.15));
+      pts.push(pts[0]);
+    } else {
+      // Fallback: bounding circle.
+      const rDeg = zone.radiusKm / 111.2;
+      const stretch = 1 / Math.max(Math.cos((zone.lat * Math.PI) / 180), 0.2);
+      pts = [];
+      for (let i = 0; i <= 64; i++) {
+        const a = (i / 64) * 2 * Math.PI;
+        pts.push(ctx.llToV(zone.lat + rDeg * Math.cos(a), zone.lon + rDeg * Math.sin(a) * stretch, ctx.R + 0.15));
+      }
     }
     this.ringGrp.add(new ctx.THREE.Line(new ctx.THREE.BufferGeometry().setFromPoints(pts), this.ringMat));
   },
