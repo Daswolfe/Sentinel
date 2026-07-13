@@ -57,6 +57,11 @@ export const CONFIG = {
   // ships in client source. Free key at firms.modaps.eosdis.nasa.gov.
   firmsKey: process.env.FIRMS_MAP_KEY || '',
 
+  // Phase B: public webcams (Windy) + street-level imagery (Mapillary), both
+  // proxied so the keys stay server-side.
+  windyKey: process.env.WINDY_WEBCAMS_KEY || '',
+  mapillaryToken: process.env.MAPILLARY_ACCESS_TOKEN || '',
+
   // Local LLM (Ollama) for intel reports. The backend proxies to it so the
   // browser needs no CORS config — Ollama can keep its default localhost bind.
   llm: {

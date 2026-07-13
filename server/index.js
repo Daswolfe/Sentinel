@@ -212,6 +212,71 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // Public webcams near a point (Windy Webcams v3) — key injected server-side.
+  if (url.pathname === '/webcams') {
+    if (!CONFIG.windyKey) return json(res, 200, { webcams: [], note: 'no WINDY_WEBCAMS_KEY' });
+    const lat = Number(url.searchParams.get('lat'));
+    const lon = Number(url.searchParams.get('lon'));
+    const radius = Math.min(500, Math.max(5, Number(url.searchParams.get('radius')) || 200));
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return json(res, 400, { error: 'bad lat/lon' });
+    try {
+      const r = await fetch(
+        `https://api.windy.com/webcams/api/v3/webcams?nearby=${lat},${lon},${radius}&limit=50&include=images,location,urls`,
+        { headers: { 'x-windy-api-key': CONFIG.windyKey } },
+      );
+      const j = await r.json();
+      const webcams = (j.webcams || [])
+        .map((w) => ({
+          id: w.webcamId,
+          title: w.title,
+          lat: w.location?.latitude,
+          lon: w.location?.longitude,
+          city: w.location?.city,
+          country: w.location?.country,
+          thumb: w.images?.current?.thumbnail,
+          preview: w.images?.current?.preview,
+          link: w.urls?.detail,
+        }))
+        .filter((w) => w.lat != null);
+      return json(res, 200, { webcams, total: j.total ?? webcams.length });
+    } catch (e) {
+      return json(res, 502, { error: String(e) });
+    }
+  }
+
+  // Nearest Mapillary street-level image to a point — token injected server-side.
+  if (url.pathname === '/streetview') {
+    if (!CONFIG.mapillaryToken) return json(res, 200, { image: null, note: 'no MAPILLARY_ACCESS_TOKEN' });
+    const lat = Number(url.searchParams.get('lat'));
+    const lon = Number(url.searchParams.get('lon'));
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return json(res, 400, { error: 'bad lat/lon' });
+    const d = 0.0012; // ~130 m box — Mapillary rejects large bboxes
+    try {
+      const r = await fetch(
+        `https://graph.mapillary.com/images?access_token=${CONFIG.mapillaryToken}` +
+          `&bbox=${lon - d},${lat - d},${lon + d},${lat + d}` +
+          `&fields=id,thumb_1024_url,computed_geometry,captured_at&limit=8`,
+      );
+      const j = await r.json();
+      const imgs = (j.data || [])
+        .map((im) => ({
+          id: im.id,
+          url: im.thumb_1024_url,
+          lon: im.computed_geometry?.coordinates?.[0],
+          lat: im.computed_geometry?.coordinates?.[1],
+          t: im.captured_at,
+        }))
+        .filter((im) => im.url && im.lat != null);
+      imgs.sort(
+        (a, b) =>
+          (a.lat - lat) ** 2 + (a.lon - lon) ** 2 - ((b.lat - lat) ** 2 + (b.lon - lon) ** 2),
+      );
+      return json(res, 200, { image: imgs[0] || null, count: imgs.length });
+    } catch (e) {
+      return json(res, 502, { error: String(e) });
+    }
+  }
+
   // Military aircraft — adsb.lol /v2/mil (CORS-blocked in-browser, so proxied).
   if (url.pathname === '/milair') {
     try {

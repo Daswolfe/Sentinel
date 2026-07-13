@@ -31,6 +31,7 @@ import jamming from './layers/jamming.js';
 import airports from './layers/airports.js';
 import cities from './layers/cities.js';
 import bikeshare from './layers/bikeshare.js';
+import webcams from './layers/webcams.js';
 import stubLayers from './layers/stubs.js';
 
 /* ═══════════════════════════ GLOBE ════════════════════════════ */
@@ -390,6 +391,7 @@ registry.addAll([
   airports,
   cities,
   bikeshare,
+  webcams,
   ...stubLayers,
 ]);
 
@@ -1017,27 +1019,49 @@ function pick(e) {
       layer: 'WX',
       headline: 'SURFACE POINT',
       rows: { LAT: lat.toFixed(3) + '°', LON: lon.toFixed(3) + '°', WEATHER: 'querying…' },
+      html: '<div id="streetview"></div>',
     });
     weatherAt(lat, lon)
       .then((w) => {
-        if (!w) return;
-        ui.showDetail({
-          layer: 'WX',
-          headline: 'SURFACE POINT — WX',
-          rows: {
-            LAT: lat.toFixed(3) + '°',
-            LON: lon.toFixed(3) + '°',
-            TEMP: w.temperature_2m + ' °C',
-            WIND: w.wind_speed_10m + ' km/h @ ' + w.wind_direction_10m + '°',
-            CLOUD: w.cloud_cover + ' %',
-            PRECIP: w.precipitation + ' mm',
-            SOURCE: 'Open-Meteo',
-          },
-          html: windRose(w.wind_direction_10m, `${w.wind_speed_10m} km/h`) + wmoDesc(w.weather_code),
-        });
+        if (w)
+          ui.showDetail({
+            layer: 'WX',
+            headline: 'SURFACE POINT — WX',
+            rows: {
+              LAT: lat.toFixed(3) + '°',
+              LON: lon.toFixed(3) + '°',
+              TEMP: w.temperature_2m + ' °C',
+              WIND: w.wind_speed_10m + ' km/h @ ' + w.wind_direction_10m + '°',
+              CLOUD: w.cloud_cover + ' %',
+              PRECIP: w.precipitation + ' mm',
+              SOURCE: 'Open-Meteo',
+            },
+            html:
+              windRose(w.wind_direction_10m, `${w.wind_speed_10m} km/h`) +
+              wmoDesc(w.weather_code) +
+              '<div id="streetview"></div>',
+          });
+        loadStreetView(lat, lon);
       })
-      .catch(() => {});
+      .catch(() => loadStreetView(lat, lon));
   }
+}
+
+// Nearest Mapillary street-level image to a clicked surface point (Phase B).
+// Injected into the weather detail; silent when no imagery covers the spot.
+async function loadStreetView(lat, lon) {
+  if (!document.getElementById('streetview')) return;
+  try {
+    const j = await (
+      await fetch(`${CONFIG.STREETVIEW.url}?lat=${lat.toFixed(5)}&lon=${lon.toFixed(5)}`)
+    ).json();
+    const el = document.getElementById('streetview'); // detail may have re-rendered
+    if (!el || !j.image?.url) return;
+    const yr = j.image.t ? ' · ' + new Date(j.image.t).getUTCFullYear() : '';
+    el.innerHTML =
+      `<div class="note" style="margin-top:8px">STREET-LEVEL — Mapillary${yr}</div>` +
+      `<img class="camimg" src="${j.image.url}" referrerpolicy="no-referrer" alt="street level">`;
+  } catch (_) {}
 }
 async function weatherAt(lat, lon) {
   const u = `${CONFIG.WEATHER.url}?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation,weather_code`;
@@ -1885,6 +1909,8 @@ let lastArrowRescale = 0;
     if (lon < -180) lon += 360;
     tiles.update(lat, lon, cr - R);
     buildings.update(lat, lon, cr - R);
+    ctx.viewLat = lat; // current view centre — used by the lazy webcams layer
+    ctx.viewLon = lon;
   }
   const lowAlt = cr - R < 1.5;
   gratGrp.visible = !lowAlt;

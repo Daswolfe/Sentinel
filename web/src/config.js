@@ -94,6 +94,12 @@ const CONFIG = {
   BIKE: {       // Bike share — curated GBFS systems aggregated by the backend
     url: "/api/bikeshare", refreshMs: 2 * 60e3,   // default-off, lazy-loaded on enable
   },
+  CCTV: {       // Public webcams (Windy) near the current view — backend proxy
+    url: "/api/webcams", radiusKm: 200,           // default-off, lazy
+  },
+  STREETVIEW: { // Mapillary nearest street-level image on surface-point click
+    url: "/api/streetview",
+  },
   BUILDINGS: {  // 3D buildings at deep zoom (Phase D)
     // Provider: OSM Buildings z15 GeoJSON tiles (footprints + height/levels).
     // The key below is their public demo key — swap in your own from

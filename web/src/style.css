@@ -105,6 +105,7 @@
   #detail .kv span{text-align:right;color:var(--ink)}
   #detail .headline{font-family:var(--disp);font-size:16px;font-weight:600;color:var(--cyan);margin-bottom:7px;letter-spacing:.04em}
   #detail .note{margin-top:9px;color:var(--dim);font-size:10px;line-height:1.5}
+  .camimg{width:100%;margin-top:6px;border-radius:3px;border:1px solid var(--line);display:block}
   #detail .close{position:absolute;top:8px;right:10px;color:var(--dim);cursor:pointer;font-size:14px}
   #detail .close:hover{color:var(--red)}
 
