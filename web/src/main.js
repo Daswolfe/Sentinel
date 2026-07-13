@@ -32,6 +32,7 @@ import airports from './layers/airports.js';
 import cities from './layers/cities.js';
 import bikeshare from './layers/bikeshare.js';
 import webcams from './layers/webcams.js';
+import outages from './layers/outages.js';
 import stubLayers from './layers/stubs.js';
 
 /* ═══════════════════════════ GLOBE ════════════════════════════ */
@@ -209,6 +210,9 @@ fetch(CONFIG.BORDERS.url)
         // zoomed out only the big names show; Europe fills in as you approach.
         sp.userData = { rank: p.LABELRANK ?? p.labelrank ?? 5, base: sp.scale.clone() };
         nationLbls.add(sp);
+        // ISO2 → label point, reused by the Net Outages layer to place outages.
+        const iso = p.ISO_A2_EH || p.ISO_A2 || p.iso_a2;
+        if (iso && iso !== '-99') ctx.nationCentroid.set(iso, [ly, lx]);
       }
       // Collect this nation's outer rings (decimated, [lat,lon]) for airspace
       // tripwires — holes/enclaves ignored, which is fine for a crossing count.
@@ -376,6 +380,7 @@ const ctx = new LayerContext({
   getScrubT: () => scrubT,
 });
 
+ctx.nationCentroid = new Map(); // ISO2 → [lat,lon], filled when borders load
 const registry = new LayerRegistry(ctx);
 registry.addAll([
   satellites,
@@ -392,6 +397,7 @@ registry.addAll([
   cities,
   bikeshare,
   webcams,
+  outages,
   ...stubLayers,
 ]);
 

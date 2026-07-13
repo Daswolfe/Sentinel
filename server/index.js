@@ -9,6 +9,7 @@ import { Analytics, correlate } from './analytics.js';
 import { getBikeshare } from './bikeshare.js';
 
 const relay = new AisRelay();
+let outagesCache = { t: 0, data: null }; // Cloudflare Radar outages (15-min cache)
 let aisStatus = relay.enabled ? 'connecting' : 'disabled';
 relay.on('status', (s) => (aisStatus = s));
 
@@ -207,6 +208,37 @@ const server = http.createServer(async (req, res) => {
       cors(res);
       res.writeHead(r.status, { 'Content-Type': 'text/plain' });
       return res.end(await r.text());
+    } catch (e) {
+      return json(res, 502, { error: String(e) });
+    }
+  }
+
+  // Internet-outage annotations (Cloudflare Radar) — token injected server-side.
+  // Cached 15 min. Returns per-outage location codes; the client places them.
+  if (url.pathname === '/outages') {
+    if (!CONFIG.cloudflareToken) return json(res, 200, { outages: [], note: 'no CLOUDFLARE_API_TOKEN' });
+    if (outagesCache.data && Date.now() - outagesCache.t < 15 * 60e3)
+      return json(res, 200, outagesCache.data);
+    try {
+      const r = await fetch(
+        'https://api.cloudflare.com/client/v4/radar/annotations/outages?dateRange=28d&limit=100&format=json',
+        { headers: { Authorization: `Bearer ${CONFIG.cloudflareToken}` } },
+      );
+      const j = await r.json();
+      const outages = (j.result?.annotations || []).map((a) => ({
+        id: a.id,
+        description: a.description,
+        cause: a.outage?.outageCause || null,
+        type: a.outage?.outageType || null,
+        codes: a.locations || [],
+        names: (a.locationsDetails || []).map((l) => l.name),
+        start: a.startDate,
+        end: a.endDate,
+        ongoing: !a.endDate,
+        url: a.linkedUrl || null,
+      }));
+      outagesCache = { t: Date.now(), data: { outages } };
+      return json(res, 200, outagesCache.data);
     } catch (e) {
       return json(res, 502, { error: String(e) });
     }

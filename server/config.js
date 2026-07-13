@@ -62,6 +62,9 @@ export const CONFIG = {
   windyKey: process.env.WINDY_WEBCAMS_KEY || '',
   mapillaryToken: process.env.MAPILLARY_ACCESS_TOKEN || '',
 
+  // Cloudflare Radar API token — internet-outage annotations (Net Outages layer).
+  cloudflareToken: process.env.CLOUDFLARE_API_TOKEN || '',
+
   // Local LLM (Ollama) for intel reports. The backend proxies to it so the
   // browser needs no CORS config — Ollama can keep its default localhost bind.
   llm: {

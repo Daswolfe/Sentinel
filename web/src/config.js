@@ -75,8 +75,8 @@ const CONFIG = {
     minAircraft: 10,       // …sampled by at least this many aircraft
     refreshMs: 60 * 60e3,
   },
-  INTERNET: {   // IODA / Cloudflare Radar outage signals — need token/proxy. Stub.
-    API_KEY: "", refreshMs: 15 * 60e3,
+  INTERNET: {   // Net outages — Cloudflare Radar via backend proxy (token in .env)
+    url: "/api/outages", refreshMs: 20 * 60e3,
   },
   MILAIR: {     // Military aircraft — adsb.lol /v2/mil via backend proxy (keyless).
     url: "/api/milair", refreshMs: 30e3, max: 800,

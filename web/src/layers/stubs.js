@@ -15,18 +15,7 @@ export const OUTAGE = {
   },
 };
 
-export const INTERNET = {
-  id: 'INTERNET',
-  name: 'Net Outages',
-  color: 0x9aa7b4,
-  css: '#9aa7b4',
-  disabled: true,
-  tag: 'STUB',
-  // IODA API or Cloudflare Radar (token + proxy for CORS). Return [{lat,lon,region,score}].
-  load(ctx) {
-    ctx.ui.status('INTERNET', 'off');
-  },
-};
+// Net Outages is now live via Cloudflare Radar — see layers/outages.js.
 
 export const SOCINT = {
   id: 'SOCINT',
@@ -42,4 +31,4 @@ export const SOCINT = {
   },
 };
 
-export default [OUTAGE, INTERNET, SOCINT];
+export default [OUTAGE, SOCINT];
