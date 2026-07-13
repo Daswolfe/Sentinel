@@ -145,6 +145,26 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { mmsi, track });
   }
 
+  // Pattern-of-life: archived maritime alerts filtered by time / kind / bbox.
+  // ?sinceH=<hours back>&kind=<kind|all>&bbox=lamin,lomin,lamax,lomax
+  if (url.pathname === '/history/alerts') {
+    if (!db) return json(res, 200, { alerts: [], kinds: [], note: 'persistence disabled' });
+    const sinceH = Math.min(720, Math.max(1, Number(url.searchParams.get('sinceH')) || 24));
+    const kind = url.searchParams.get('kind');
+    const bboxStr = url.searchParams.get('bbox');
+    const bbox = bboxStr ? bboxStr.split(',').map(Number) : null;
+    try {
+      const alerts = db.queryAlerts({
+        sinceMs: Date.now() - sinceH * 3600e3,
+        kind: kind && kind !== 'all' ? kind : null,
+        bbox: bbox && bbox.length === 4 && bbox.every(Number.isFinite) ? bbox : null,
+      });
+      return json(res, 200, { alerts, kinds: db.alertKinds() });
+    } catch (e) {
+      return json(res, 502, { error: String(e) });
+    }
+  }
+
   // Full flight path for one aircraft (OpenSky tracks API, OAuth attached).
   if (url.pathname === '/opensky/track') {
     const icao = (url.searchParams.get('icao24') || '').toLowerCase();

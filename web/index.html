@@ -65,6 +65,22 @@
   <div class="body"><div id="dosList"></div></div>
 </div>
 
+<div class="panel" id="history">
+  <h2>HISTORY</h2>
+  <div class="body">
+    <div class="histCtl">
+      <select id="hKind" title="Event kind"><option value="all">ALL KINDS</option></select>
+      <select id="hSince" title="Time window">
+        <option value="6">6 h</option><option value="24" selected>24 h</option>
+        <option value="168">7 d</option><option value="720">30 d</option>
+      </select>
+      <label title="Limit to the focused region's box"><input type="checkbox" id="hRegion"> REGION</label>
+      <button id="hSearch">SEARCH</button>
+    </div>
+    <div id="hResults"><div class="histEmpty">Query the archive of maritime events (dark ships, STS transfers, loitering) by time, kind, and region. Click a result to fly there.</div></div>
+  </div>
+</div>
+
 <div class="panel" id="tripwires">
   <h2>TRIPWIRES</h2>
   <div class="body">

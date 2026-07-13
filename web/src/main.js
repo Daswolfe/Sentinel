@@ -769,6 +769,66 @@ function renderDossierPanel() {
     if (el) { el.style.display = 'block'; el.textContent = dosBriefCache.get(dosOpen); }
   }
 }
+/* ═══════════════ HISTORY (pattern-of-life queries) ════════════ */
+const KIND_LABEL = { dark: 'DARK SHIP', sts: 'STS TRANSFER', loiter: 'LOITER', resurface: 'AIS RESURFACE' };
+let histAlerts = [];
+async function runHistory() {
+  const results = document.getElementById('hResults');
+  const sinceH = document.getElementById('hSince').value;
+  const kind = document.getElementById('hKind').value;
+  const region = document.getElementById('hRegion').checked ? activeRegion?.bbox : null;
+  results.innerHTML = '<div class="histEmpty">Searching the archive…</div>';
+  try {
+    let u = `/api/history/alerts?sinceH=${sinceH}&kind=${kind}`;
+    if (region) u += `&bbox=${region.join(',')}`;
+    const j = await (await fetch(u)).json();
+    histAlerts = j.alerts || [];
+    if (!histAlerts.length) {
+      results.innerHTML = `<div class="histEmpty">No archived events match${region ? ' in this region' : ''}. ${
+        j.note ? '(' + j.note + ')' : 'The SQLite archive fills as maritime alerts fire.'
+      }</div>`;
+      return;
+    }
+    results.innerHTML =
+      `<div class="histCount">${histAlerts.length} event${histAlerts.length > 1 ? 's' : ''}</div>` +
+      histAlerts
+        .map(
+          (a, i) =>
+            `<div class="histRow" data-i="${i}"><b>${KIND_LABEL[a.kind] || a.kind.toUpperCase()}</b> ${
+              a.name || (a.mmsi ? 'MMSI ' + a.mmsi : '')
+            }${a.context?.length ? `<span class="histCtx">⚠ ${a.context.join('; ')}</span>` : ''}<span class="histT">${new Date(a.t).toUTCString().slice(5, 22)} · ${
+              a.lat != null ? a.lat.toFixed(1) + '°, ' + a.lon.toFixed(1) + '°' : '—'
+            }</span></div>`,
+        )
+        .join('');
+  } catch (e) {
+    results.innerHTML = '<div class="histEmpty">History query failed — is the backend up?</div>';
+  }
+}
+document.getElementById('hSearch').addEventListener('click', runHistory);
+document.getElementById('hResults').addEventListener('click', (e) => {
+  const row = e.target.closest('.histRow');
+  if (!row) return;
+  const a = histAlerts[+row.dataset.i];
+  if (a && a.lat != null) {
+    flyTo(a.lat, a.lon, R + 0.25);
+    ui.tick(`History — ${KIND_LABEL[a.kind] || a.kind} @ ${a.lat.toFixed(1)}°, ${a.lon.toFixed(1)}°`);
+  }
+});
+// Populate the kind dropdown with archive counts once at boot.
+(async () => {
+  try {
+    const j = await (await fetch('/api/history/alerts?sinceH=720&kind=all')).json();
+    const sel = document.getElementById('hKind');
+    for (const k of j.kinds || []) {
+      const o = document.createElement('option');
+      o.value = k.kind;
+      o.textContent = `${(KIND_LABEL[k.kind] || k.kind).toUpperCase()} (${k.n})`;
+      sel.appendChild(o);
+    }
+  } catch (_) {}
+})();
+
 document.getElementById('dosList').addEventListener('click', (e) => {
   const code = e.target.closest('[data-code]')?.dataset.code;
   if (!code) return;

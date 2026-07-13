@@ -169,6 +169,24 @@
   .dosClear:hover{color:var(--red)}
   .dosBriefOut{white-space:pre-wrap;font-size:10px;line-height:1.5;color:var(--ink);
     background:#0c1319;border:1px solid var(--line);border-radius:3px;padding:7px;margin-top:4px;max-height:34vh;overflow-y:auto}
+  /* ── history (pattern-of-life) ────────────────────────────── */
+  #history{right:14px;top:74px;width:300px}
+  #history .body{padding:9px 11px;max-height:52vh;overflow-y:auto}
+  .histCtl{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-bottom:7px}
+  .histCtl select{background:#0c1319;border:1px solid var(--line);color:var(--ink);font-family:var(--mono);
+    font-size:9px;padding:3px 4px;border-radius:3px;cursor:pointer}
+  .histCtl label{font-size:9px;color:var(--dim);letter-spacing:.06em;display:flex;align-items:center;gap:3px;cursor:pointer}
+  .histCtl input{accent-color:var(--amber)}
+  #hSearch{margin-left:auto;background:none;border:1px solid var(--cyan);color:var(--cyan);font-family:var(--disp);
+    font-weight:600;letter-spacing:.1em;font-size:10px;padding:4px 10px;border-radius:3px;cursor:pointer}
+  #hSearch:hover{background:#12222c}
+  .histEmpty{font-size:10px;color:var(--dim);line-height:1.55;padding:6px 2px}
+  .histCount{font-size:9px;color:var(--amber);letter-spacing:.1em;margin-bottom:4px}
+  .histRow{font-size:10px;line-height:1.45;color:var(--ink);padding:4px 0;border-bottom:1px dashed #172430;cursor:pointer}
+  .histRow:hover{background:#141f2a}
+  .histRow b{color:var(--red);font-weight:600;letter-spacing:.04em}
+  .histCtx{display:block;color:var(--amber);font-size:9px}
+  .histT{display:block;color:var(--dim);font-size:9px}
   /* ── tracking boxes / tripwires ───────────────────────────── */
   #tripwires{left:262px;top:74px;width:236px}
   #tripwires .body{padding:9px 11px;max-height:52vh;overflow-y:auto}
