@@ -8,6 +8,7 @@ import { RadarOverlay } from './radar.js';
 import { BuildingsOverlay } from './buildings.js';
 import { Tripwires } from './tripwires.js';
 import { OrbitWatch } from './orbitwatch.js';
+import { Dossiers } from './dossiers.js';
 import { runwayDiagram } from './runways.js';
 import {
   FILTER, contactPasses, NAT_OPTIONS,
@@ -715,6 +716,79 @@ const orbitWatch = new OrbitWatch(scene, ctx, (m, o) => {
 });
 setInterval(() => orbitWatch.scan(), 15000);
 
+/* ═══════════════════════ DOSSIERS ═════════════════════════════ */
+let dosBriefBusy = false; // suppress re-render while a brief streams
+const dosBriefCache = new Map(); // code -> last brief text (session only)
+const dossiers = new Dossiers(() => {
+  if (!dosBriefBusy) renderDossierPanel();
+});
+function timeAgo(t) {
+  const s = (Date.now() - t) / 1000;
+  if (s < 90) return 'just now';
+  if (s < 5400) return Math.round(s / 60) + ' min ago';
+  if (s < 129600) return Math.round(s / 3600) + ' h ago';
+  return Math.round(s / 86400) + ' d ago';
+}
+let dosOpen = null;
+function renderDossierPanel() {
+  const list = document.getElementById('dosList');
+  if (!list) return;
+  const ds = dossiers.list();
+  if (!ds.length) {
+    list.innerHTML =
+      '<div class="dosEmpty">No dossiers yet. They build automatically as attributable alerts ' +
+      '(dark ships, military squawks, STS transfers, surveillance orbits…) accrue by flag state.</div>';
+    return;
+  }
+  list.innerHTML = ds
+    .map((d) => {
+      const open = d.code === dosOpen;
+      let body = '';
+      if (open) {
+        const evs = d.events
+          .slice(0, 25)
+          .map(
+            (e) =>
+              `<div class="dosEv"><b>${e.type}</b> ${e.summary}<span>${new Date(e.t).toUTCString().slice(5, 22)}</span></div>`,
+          )
+          .join('');
+        body =
+          `<div class="dosEvents">${evs}</div>` +
+          `<div class="dosBar"><span class="dosBrief" data-code="${d.code}">◈ LLM BRIEF</span>` +
+          `<span class="dosClear" data-code="${d.code}">✕ clear</span></div>` +
+          `<div class="dosBriefOut" id="dosBrief-${d.code}" style="display:none"></div>`;
+      }
+      return `<div class="dosItem${open ? ' open' : ''}">
+        <div class="dosHead" data-code="${d.code}"><b>${d.name}</b>
+          <span class="dosCount">${d.events.length} · ${timeAgo(d.lastSeen)}</span></div>${body}</div>`;
+    })
+    .join('');
+  // Restore a cached brief for the open dossier (survives re-renders).
+  if (dosOpen && dosBriefCache.has(dosOpen)) {
+    const el = document.getElementById('dosBrief-' + dosOpen);
+    if (el) { el.style.display = 'block'; el.textContent = dosBriefCache.get(dosOpen); }
+  }
+}
+document.getElementById('dosList').addEventListener('click', (e) => {
+  const code = e.target.closest('[data-code]')?.dataset.code;
+  if (!code) return;
+  if (e.target.classList.contains('dosBrief')) {
+    const out = document.getElementById('dosBrief-' + code);
+    out.style.display = 'block';
+    dosBriefBusy = true;
+    streamLLM(dossiers.briefPrompt(code), out)
+      .then((text) => dosBriefCache.set(code, text || out.textContent))
+      .finally(() => { dosBriefBusy = false; });
+  } else if (e.target.classList.contains('dosClear')) {
+    dosBriefCache.delete(code);
+    dossiers.clear(code);
+  } else {
+    dosOpen = dosOpen === code ? null : code;
+    renderDossierPanel();
+  }
+});
+renderDossierPanel();
+
 /* ═══════════════════════ WATCHLIST v2 ═════════════════════════ */
 function renderWatchlist() {
   const list = document.getElementById('wlList');
@@ -1398,39 +1472,24 @@ RECENT ALERTS (with cross-layer correlation where flagged):
 ${Alerts.log.slice(0, 8).map((a) => '- ' + a.title + ': ' + a.msg).join('\n') || '- none'}`;
 }
 let reportBusy = false;
-async function generateReport() {
-  if (reportBusy) return;
-  reportBusy = true;
-  const panel = document.getElementById('report');
-  const body = document.getElementById('reportBody');
-  const btn = document.getElementById('reportBtn');
-  panel.style.display = 'block';
-  body.textContent = 'Querying local model (Ollama)… first token can take a few seconds.';
-  btn.disabled = true;
+// Stream a prompt through the backend Ollama proxy into `el`, token by token.
+// Shared by the SITREP report and the per-nation dossier briefs.
+async function streamLLM(prompt, el) {
+  el.textContent = 'Querying local model (Ollama)… first token can take a few seconds.';
   try {
     const r = await fetch(CONFIG.LLM.endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt:
-          'You are the watch officer of a geospatial intelligence operations center. ' +
-          'Write a concise SITREP with exactly three sections: HEADLINE, KEY DEVELOPMENTS, WATCH ITEMS. ' +
-          'Prioritize the highest-signal items: military aircraft, dark ships, GPS-denied zones, ' +
-          'conflict clusters, large fires, and any alert with cross-layer correlation. ' +
-          'Be factual and terse; do not invent data. If vessels are simulated, say so. Sensor snapshot:\n\n' +
-          buildSitrep(),
-      }),
+      body: JSON.stringify({ prompt }),
     });
     if (!r.ok || !r.body) {
       const j = await r.json().catch(() => ({}));
       throw new Error(j.error || `HTTP ${r.status}`);
     }
-    // Stream Ollama's NDJSON token feed (proxied by the backend).
     const reader = r.body.getReader();
     const dec = new TextDecoder();
-    let buf = '';
-    let out = '';
-    body.textContent = '';
+    let buf = '', out = '';
+    el.textContent = '';
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -1444,25 +1503,39 @@ async function generateReport() {
           const j = JSON.parse(line);
           if (j.response) {
             out += j.response;
-            body.textContent = out;
-            body.scrollTop = body.scrollHeight;
+            el.textContent = out;
+            el.scrollTop = el.scrollHeight;
           }
         } catch (_) {}
       }
     }
-    if (!out) body.textContent = '(model returned no text — is the model pulled?)';
+    if (!out) el.textContent = '(model returned no text — is the model pulled? `ollama pull llama3.1:8b`)';
+    return out;
   } catch (e) {
-    body.textContent = `Local model unavailable via the backend proxy (${CONFIG.LLM.endpoint}).
-Reason: ${e.message}
+    el.textContent =
+      `Local model unavailable via the backend proxy (${CONFIG.LLM.endpoint}): ${e.message}\n\n` +
+      'Install Ollama (ollama.com/download), `ollama pull llama3.1:8b`, ensure `ollama serve` is ' +
+      'running, then retry. Set OLLAMA_MODEL in .env for a different model.';
+    return '';
+  }
+}
 
-To enable local intel reports (no browser CORS config needed — the backend
-talks to Ollama for you):
- 1. Install Ollama → https://ollama.com/download
- 2. Pull the model:   ollama pull llama3.1:8b
- 3. Ensure it's serving: ollama serve   (the installer usually auto-starts it)
- 4. Restart the ARGUS backend, then click this button again.
-
-Set a different model with the OLLAMA_MODEL env var before starting the backend.`;
+async function generateReport() {
+  if (reportBusy) return;
+  reportBusy = true;
+  const btn = document.getElementById('reportBtn');
+  document.getElementById('report').style.display = 'block';
+  btn.disabled = true;
+  try {
+    await streamLLM(
+      'You are the watch officer of a geospatial intelligence operations center. ' +
+        'Write a concise SITREP with exactly three sections: HEADLINE, KEY DEVELOPMENTS, WATCH ITEMS. ' +
+        'Prioritize the highest-signal items: military aircraft, dark ships, GPS-denied zones, ' +
+        'conflict clusters, large fires, and any alert with cross-layer correlation. ' +
+        'Be factual and terse; do not invent data. If vessels are simulated, say so. Sensor snapshot:\n\n' +
+        buildSitrep(),
+      document.getElementById('reportBody'),
+    );
   } finally {
     reportBusy = false;
     btn.disabled = false;
@@ -1493,6 +1566,7 @@ const Alerts = {
     ui.tick(`⚠ ${title} — ${msg}`);
     ui.renderAlerts();
     Archive.put('alerts', rec);
+    dossiers.ingestAlert(rec); // attribute to a flag state → per-nation dossier
     if (CONFIG.ALERTS.notify && 'Notification' in window && Notification.permission === 'granted')
       try {
         new Notification('ARGUS — ' + title, { body: msg });
@@ -1696,7 +1770,7 @@ document.getElementById('imgBtn').addEventListener('click', cycleImagery);
 ui.init(); // build sidebar + status dots (now that Alerts/Archive exist)
 makePanels(); // panels: drag title to move, click title to collapse (persisted)
 // Dev/debug handle — inspect scene + layers from the console.
-window.__argus = { scene, camera, ctx, registry, tripwires, orbitWatch, get pivot() { return pivot; }, get camMode() { return camMode; } };
+window.__argus = { scene, camera, ctx, registry, tripwires, orbitWatch, dossiers, get pivot() { return pivot; }, get camMode() { return camMode; } };
 Alerts.armNotify();
 Archive.open();
 registry.init(); // one-time setup (aircraft trails, sea relay connection)
