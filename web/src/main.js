@@ -7,6 +7,7 @@ import { TileOverlay } from './tiles.js';
 import { RadarOverlay } from './radar.js';
 import { BuildingsOverlay } from './buildings.js';
 import { Tripwires } from './tripwires.js';
+import { OrbitWatch } from './orbitwatch.js';
 import { runwayDiagram } from './runways.js';
 import {
   FILTER, contactPasses, NAT_OPTIONS,
@@ -700,6 +701,19 @@ setInterval(() => {
   updateTripwireStats();
 }, 2500);
 renderTripwiresPanel();
+
+/* ═══════════════ SURVEILLANCE-ORBIT DETECTOR ══════════════════ */
+const orbitWatch = new OrbitWatch(scene, ctx, (m, o) => {
+  if (!m) return;
+  Alerts.fire(
+    'SURVEILLANCE ORBIT',
+    `${m.headline} circling — ${o.loops.toFixed(1)} loops, ~${o.radiusKm.toFixed(0)} km radius`,
+    o.lat,
+    o.lon,
+    { icao: m.icao },
+  );
+});
+setInterval(() => orbitWatch.scan(), 15000);
 
 /* ═══════════════════════ WATCHLIST v2 ═════════════════════════ */
 function renderWatchlist() {
@@ -1682,7 +1696,7 @@ document.getElementById('imgBtn').addEventListener('click', cycleImagery);
 ui.init(); // build sidebar + status dots (now that Alerts/Archive exist)
 makePanels(); // panels: drag title to move, click title to collapse (persisted)
 // Dev/debug handle — inspect scene + layers from the console.
-window.__argus = { scene, camera, ctx, registry, tripwires, get pivot() { return pivot; }, get camMode() { return camMode; } };
+window.__argus = { scene, camera, ctx, registry, tripwires, orbitWatch, get pivot() { return pivot; }, get camMode() { return camMode; } };
 Alerts.armNotify();
 Archive.open();
 registry.init(); // one-time setup (aircraft trails, sea relay connection)
