@@ -6,6 +6,11 @@ dist/
 *.log
 .DS_Store
 /web/.vite/
+# Tauri desktop shell build artifacts
+src-tauri/target/
+src-tauri/gen/
+src-tauri/icons/android/
+src-tauri/icons/ios/
 # runtime state — Google 3D Tiles monthly billing meter
 server/data/google-tiles-usage.json
 # runtime SQLite (server/data/wpi.json IS committed; the live DB is not)

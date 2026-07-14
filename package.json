@@ -4,7 +4,10 @@
   "private": true,
   "description": "ARGUS — open-source 4D geospatial command center (satellites, aircraft, live maritime AIS, seismic, conflict, launches).",
   "type": "module",
-  "workspaces": ["server", "web"],
+  "workspaces": [
+    "server",
+    "web"
+  ],
   "scripts": {
     "dev": "concurrently -n server,web -c cyan,magenta \"npm:dev:server\" \"npm:dev:web\"",
     "dev:server": "npm --prefix server run dev",
@@ -12,9 +15,12 @@
     "build": "npm --prefix web run build",
     "start": "npm --prefix server start",
     "test": "npm --prefix server test && npm --prefix web test",
-    "verify-ais": "npm --prefix server run verify-ais"
+    "verify-ais": "npm --prefix server run verify-ais",
+    "desktop": "tauri build",
+    "desktop:dev": "tauri dev"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
     "concurrently": "^9.1.0"
   },
   "license": "MIT"

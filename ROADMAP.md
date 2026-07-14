@@ -300,8 +300,14 @@ the "S" in OSINT. **All items shipped:**
     concurrent websockets per IP (default 4, `WS_MAX_PER_IP`); `TRUST_PROXY=1`
     reads X-Forwarded-For behind a reverse proxy. Verified: burst of 310 →
     exactly 300×200 + 10×429.
-19. ⏸ **Tauri desktop app** — BLOCKED: no Rust toolchain on the dev box
-    (checked 2026-07-14). Install rustup, then revisit.
+19. ✅ **Tauri desktop app** — DONE 2026-07-14 (Rust toolchain installed).
+    `src-tauri/` shell: spawns `node server/index.js` (skipped if :8787 is
+    already up), waits for the port, opens a native window at
+    `http://127.0.0.1:8787/` — the backend now serves `web/dist` statically
+    with same-origin `/api` + `/ws`, so the web app runs unmodified; the child
+    is killed on window exit. `npm run desktop` → NSIS installer + portable
+    exe (`src-tauri/target/release/`). Needs Node on the machine and runs
+    from a checkout (the backend isn't bundled into the installer).
 20. ✅ **Recorded-scenario replay** — DONE 2026-07-14. Message-level NDJSON
     capture instead of the SQLite fixes (those are 5-min breadcrumbs with no
     name/sog/type — too lossy to drive the dark-ship engine): `AIS_RECORD=`

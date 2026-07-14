@@ -9,6 +9,16 @@ import { getConflict } from './gdelt.js';
 import { Analytics, correlate } from './analytics.js';
 import { getBikeshare } from './bikeshare.js';
 
+// Desktop-shell watchdog: when spawned by the Tauri shell (ARGUS_PARENT_PID),
+// exit if the parent dies — covers force-kills where the shell's own exit
+// hook (which kills us gracefully) never gets to run.
+const parentPid = Number(process.env.ARGUS_PARENT_PID);
+if (parentPid) {
+  setInterval(() => {
+    try { process.kill(parentPid, 0); } catch { process.exit(0); }
+  }, 5000).unref();
+}
+
 const relay = new AisRelay();
 let outagesCache = { t: 0, data: null }; // Cloudflare Radar outages (15-min cache)
 let maritimeCache = null; // preprocessed maritime-boundary index (static)
@@ -85,6 +95,42 @@ setInterval(() => {
   for (const [ip, b] of RL.buckets) if (now > b.reset) RL.buckets.delete(ip);
 }, 5 * 60e3).unref();
 
+// API pathnames (post-/api-strip). Kept for the static-serving fallthrough:
+// anything else on GET is assumed to be a frontend asset.
+const ROUTES = new Set([
+  '/health', '/llm', '/ais/snapshot', '/ais/track', '/gpsjam', '/history/alerts',
+  '/opensky/track', '/bikeshare', '/firms', '/outages', '/webcams', '/streetview',
+  '/milair', '/avwx', '/conflict', '/opensky', '/config', '/tiles-session', '/maritime',
+]);
+
+// Minimal static file server for web/dist (Tauri desktop shell / simple LAN
+// hosting — nginx still recommended for real deployments). Hashed assets get
+// immutable caching; index.html must revalidate so new builds land.
+const DIST = new URL('../web/dist/', import.meta.url);
+const MIME = {
+  html: 'text/html', js: 'text/javascript', css: 'text/css', json: 'application/json',
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', svg: 'image/svg+xml',
+  ico: 'image/x-icon', woff2: 'font/woff2', webp: 'image/webp',
+};
+async function serveStatic(pathname, res) {
+  const rel = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
+  let file;
+  try {
+    file = new URL(rel, DIST);
+    if (!file.pathname.startsWith(DIST.pathname)) return false; // traversal guard
+    const body = await readFile(file);
+    const ext = rel.split('.').pop().toLowerCase();
+    res.writeHead(200, {
+      'Content-Type': MIME[ext] || 'application/octet-stream',
+      'Cache-Control': rel.startsWith('assets/') ? 'public, max-age=31536000, immutable' : 'no-cache',
+    });
+    res.end(body);
+    return true;
+  } catch {
+    return false; // missing dist or file — fall through to the API 404
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
     cors(res);
@@ -92,6 +138,17 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
   const url = new URL(req.url, 'http://localhost');
+
+  // Same-origin deployments (Tauri desktop shell, LAN static serving) call the
+  // API as /api/<route> — the prefix the vite dev proxy / nginx would strip.
+  const isApi = url.pathname.startsWith('/api/');
+  if (isApi) url.pathname = url.pathname.slice(4);
+
+  // Static frontend (web/dist) for anything that isn't an API call — this is
+  // what the desktop shell window loads, giving it same-origin /api + /ws.
+  if (!isApi && req.method === 'GET' && url.pathname !== '/health' && !ROUTES.has(url.pathname)) {
+    if (await serveStatic(url.pathname, res)) return;
+  }
 
   if (url.pathname !== '/health' && rateLimited(clientIp(req))) {
     res.setHeader('Retry-After', '60');
