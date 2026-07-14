@@ -56,6 +56,35 @@ const json = (res, code, obj) => {
   res.end(JSON.stringify(obj));
 };
 
+// ── Per-IP rate limiting (Theme 4.18) ──────────────────────────────────
+// Sliding one-minute window per client IP + a cap on concurrent websockets.
+// Generous defaults (the UI makes ~20 req/min) — the point is abuse
+// protection before any non-localhost exposure, not throttling the operator.
+// RATE_LIMIT_PER_MIN=0 disables. Honors X-Forwarded-For only when
+// TRUST_PROXY=1 (set it when running behind a reverse proxy).
+const RL = {
+  max: Number(process.env.RATE_LIMIT_PER_MIN ?? 300),
+  wsMax: Number(process.env.WS_MAX_PER_IP ?? 4),
+  buckets: new Map(), // ip -> { n, reset }
+  wsCount: new Map(), // ip -> live websocket connections
+};
+const clientIp = (req) =>
+  (process.env.TRUST_PROXY === '1' &&
+    (req.headers['x-forwarded-for'] || '').split(',')[0].trim()) ||
+  req.socket.remoteAddress ||
+  '?';
+function rateLimited(ip) {
+  if (!RL.max) return false;
+  const now = Date.now();
+  let b = RL.buckets.get(ip);
+  if (!b || now > b.reset) RL.buckets.set(ip, (b = { n: 0, reset: now + 60e3 }));
+  return ++b.n > RL.max;
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, b] of RL.buckets) if (now > b.reset) RL.buckets.delete(ip);
+}, 5 * 60e3).unref();
+
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
     cors(res);
@@ -63,6 +92,11 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
   const url = new URL(req.url, 'http://localhost');
+
+  if (url.pathname !== '/health' && rateLimited(clientIp(req))) {
+    res.setHeader('Retry-After', '60');
+    return json(res, 429, { error: 'rate limited — slow down' });
+  }
 
   // Optional shared-token auth (BACKEND_TOKEN). /health stays open — it's
   // the liveness probe and leaks nothing sensitive.
@@ -424,11 +458,19 @@ const wss = new WebSocketServer({
   server,
   path: '/ws',
   verifyClient: ({ req }) =>
-    !CONFIG.token ||
-    new URL(req.url, 'http://localhost').searchParams.get('token') === CONFIG.token,
+    (!CONFIG.token ||
+      new URL(req.url, 'http://localhost').searchParams.get('token') === CONFIG.token) &&
+    (!RL.wsMax || (RL.wsCount.get(clientIp(req)) ?? 0) < RL.wsMax),
 });
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
+  const ip = clientIp(req);
+  RL.wsCount.set(ip, (RL.wsCount.get(ip) ?? 0) + 1);
+  ws.on('close', () => {
+    const n = (RL.wsCount.get(ip) ?? 1) - 1;
+    if (n <= 0) RL.wsCount.delete(ip);
+    else RL.wsCount.set(ip, n);
+  });
   // Bring the new client up to speed immediately.
   ws.send(JSON.stringify({ type: 'snapshot', ...relay.snapshot() }));
 });

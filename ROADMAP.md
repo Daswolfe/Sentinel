@@ -283,25 +283,34 @@ the "S" in OSINT. **All items shipped:**
     photorealistic cities at deep zoom.
 14. **Filter & marker polish** — work the filter backlog (§7) as clutter demands.
 
-### Theme 4 — UX, packaging & reach *(now that it's on GitHub)*
-15. **Global units settings panel** — a settings app to set units across **all**
-    layers: altitude (ft / m / flight level), speed (kt / km·h⁻¹ / mph), distance
-    (nm / km / mi), temperature (°C / °F), coordinates (DD / DMS). Normalizes the
-    mixed-unit ADS-B feeds (bug §4.4) behind one canonical internal unit.
-16. **Contributor on-ramp** — tighten README/SETUP for a cold `git clone → npm i
-    → npm run dev`; confirm keyless mode is clean.
-17. **Docker Compose one-liner** — backend + static nginx for `web/dist`.
-18. **Per-IP rate limiting** — required before any non-localhost deployment.
+### Theme 4 — UX, packaging & reach *(← ACTIVE)*
+15. ✅ **Global units settings panel** — DONE 2026-07-14: `web/src/units.js`
+    (canonical internal units → display conversion) + ⚙ UNITS header popover
+    (altitude ft/m/FL · speed kt/km·h⁻¹/mph · distance nm/km/mi · temp °C/°F ·
+    coords DD/DMS), persisted; applied to AIR/MILAIR/SEA/DARK rows, surface
+    weather, and METAR panels. Changes apply as each feed refreshes.
+16. ⏸ **Contributor on-ramp** — SHELVED (per operator, 2026-07-14).
+17. ✅ **Docker Compose one-liner** — DONE 2026-07-14: `docker compose up
+    --build` → nginx on :8080 serving `web/dist` + proxying /api & /ws to the
+    backend container (`docker/*.Dockerfile`, `docker/nginx.conf`,
+    `docker-compose.yml`). Vite production build verified; container build
+    itself not yet run (no Docker on the dev box).
+18. ✅ **Per-IP rate limiting** — DONE 2026-07-14: sliding 1-min window per IP
+    (default 300 req/min, `RATE_LIMIT_PER_MIN`, 0=off, /health exempt) + max
+    concurrent websockets per IP (default 4, `WS_MAX_PER_IP`); `TRUST_PROXY=1`
+    reads X-Forwarded-For behind a reverse proxy. Verified: burst of 310 →
+    exactly 300×200 + 10×429.
 19. **Tauri desktop app** — ~10 MB native shell, Node backend as sidecar.
 20. **Recorded-scenario replay** — replay a saved SQLite capture offline, for
     demos and for contributors without live keys.
 
 ### Recommended next 3 moves
-1. ✅ ~~**Nation highlight walls** (Theme 3.10)~~ — shipped 2026-07-13.
-2. ✅ ~~**Maritime boundaries** (Theme 3.11)~~ — shipped 2026-07-13.
-3. **Theme 4 kick-off** — global units settings panel (#15) or contributor
-   on-ramp (#16); Theme 3 filter polish (#14) as clutter demands. Google 3D
-   Tiles (#13) stays shelved until the render-pass conflict is diagnosed.
+1. **Recorded-scenario replay** (#20) — replay a saved SQLite capture offline;
+   also unlocks demos without live keys.
+2. **Tauri desktop app** (#19) — needs the Rust toolchain on the dev box.
+3. **Density cap filter** (§7 leftover) — "top N by relevance in view";
+   diagnose the shelved Google 3D Tiles render-pass conflict (#13) when
+   convenient.
 
 ---
 
@@ -333,6 +342,11 @@ name), ✅ route stage (climb/cruise/descent, ±300 ft/min).
 
 ## 8. Changelog (high level)
 
+- **2026-07-14 (later)** — **Theme 3 complete** (filter backlog shipped: ship
+  class, aircraft category, emergency-only, fast-mover, dark-duration,
+  constellation, route stage). **Theme 4**: global units panel (#15), Docker
+  Compose one-liner (#17), per-IP rate limiting + WS cap (#18); contributor
+  on-ramp (#16) shelved per operator. Remaining: Tauri (#19), replay (#20).
 - **2026-07-14** — **Theme 3.11 shipped**: "Sea Boundaries" layer (EEZ /
   disputed / 24 nm / 12 nm, Marine Regions v12 → 1.9 MB preprocessed index,
   `/api/maritime`). **Theme 3.13 attempted & shelved**: Google Photorealistic
