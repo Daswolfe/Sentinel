@@ -281,6 +281,27 @@ adjustable up to 48 h) so the 4D scrubber reaches hours back, and 📷 SNAPSHOT
 exports the whole global picture as JSON. The header health strip mirrors
 `/health` (tracked vessels, dark flags vs suppressions, STS alerts, DB status).
 
+## Intelligence layer (the "S" in OSINT)
+
+Beyond plotting, ARGUS derives insight:
+
+- **Analytics engine** (`server/analytics.js`) — dark-ship detection, ship-to-ship
+  transfer candidates, and single-vessel **loitering**, all suppressed by ~14.7k
+  Global Fishing Watch anchorages. Every maritime alert is enriched with
+  **cross-layer correlation** (inside a GPS-denied zone? near a conflict cluster?).
+- **Surveillance-orbit detector** (`web/src/orbitwatch.js`) — flags aircraft
+  circling one spot (ISR / holding signature) via a winding-number test.
+- **Tracking boxes / tripwires** (`web/src/tripwires.js`) — draw a polygon (or
+  build one from a nation's borders) and count contacts entering/exiting by class.
+- **Per-nation dossiers** (`web/src/dossiers.js`) — auto-accrue from attributable
+  alerts by flag state (MMSI MID / ICAO24 hex), with a streamed **local-LLM brief**
+  per nation (Ollama, via `/api/llm`). The SITREP report leads with the
+  highest-signal correlated events.
+- **Pattern-of-life** — the SQLite archive (`server/db.js`) is queryable by
+  time / kind / bounding-box.
+- **Net Outages** — Cloudflare Radar internet-outage annotations; **CCTV** (Windy
+  Webcams) and **Mapillary** street-level imagery on demand.
+
 ---
 
 ## Deploying

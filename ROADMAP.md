@@ -153,9 +153,29 @@ The tool is now broad. The strategic pivot is from *breadth* (more feeds) toward
 **depth** (turning feeds into insight) and **reach** (making it runnable and
 shareable now that it's on GitHub). Four themes, roughly in priority order.
 
-### Theme 1 — Intelligence depth *(the differentiator)*
+### Theme 1 — Intelligence depth *(✅ COMPLETE — 2026-07-11/13)*
 Raw dots are commodity; correlated insight is not. This is where ARGUS earns
-the "S" in OSINT.
+the "S" in OSINT. **All items shipped:**
+- ✅ **Correlation → LLM SITREP** — maritime alerts carry cross-layer context;
+  the streamed SITREP (Ollama via `/api/llm`) leads with the highest-signal
+  correlated events.
+- ✅ **Watchlist v2** — per-entry colour, alert-on-appear, add-from-map.
+- ✅ **Tracking boxes / tripwires** (`web/src/tripwires.js`) — draw a polygon,
+  count entries/exits by class, running tallies, persisted.
+- ✅ **Airspace tripwires** — build a tripwire from a nation's border polygons
+  (multi-ring), tracks aircraft in/out of that airspace.
+- ✅ **Surveillance-orbit detector** (`web/src/orbitwatch.js`) — winding-number
+  test over aircraft track history (≥1.5 loops, bounded radius) → alert + orbit ring.
+- ✅ **Loitering & route-anomaly** (`server/analytics.js`) — single-vessel loiter
+  in open water, suppressed by the ~14.7k **GFW Named Anchorages** now in `ports.js`.
+- ✅ **Dossier builder** (`web/src/dossiers.js`) — per-nation files auto-accrue
+  from attributable alerts (flag state via MMSI MID / ICAO24 hex block), timeline
+  panel, streamed LLM brief. The intelligence capstone.
+- ✅ **Pattern-of-life queries** (`server/db.js` `queryAlerts`) — SQLite archive
+  queryable by time / kind / bbox + kind histogram.
+
+<details><summary>Original Theme 1 detail (for reference)</summary>
+
 1. **Correlation into the LLM SITREP** — feed the already-computed cross-layer
    context (dark ship inside a jamming zone near a conflict cluster) to the
    report instead of counts. Cheap, immediate.
@@ -199,16 +219,25 @@ the "S" in OSINT.
 7. **Pattern-of-life queries** — the SQLite archive already holds days of tracks;
    expose "every dark event in Hormuz this month"–style queries + a history panel.
 
-### Theme 2 — New sensors
-8. **Phase B: CCTV (Windy) + Mapillary** — imminent; ship as soon as keys land.
-9. **Opportunistic feeds** — filling the stubs (power/internet outages via
-   IODA/Cloudflare Radar; social via X API) as keys/appetite allow.
-   *Cloudflare Radar token is already provisioned — stored in `.env` as
-   `CLOUDFLARE_API_TOKEN` (gitignored; placeholder in `.env.example`). Wire the
-   Net Outages stub to Cloudflare Radar's outage API via a backend `/api/outages`
-   proxy that injects it, same pattern as the other proxies.*
+</details>
 
-### Theme 3 — Fidelity, cartography & boundaries
+### Theme 2 — New sensors *(✅ COMPLETE — 2026-07-11)*
+- ✅ **Phase B: CCTV (Windy Webcams) + Mapillary street-level** — `layers/webcams.js`
+  (public webcams via `/api/webcams`) + Mapillary imagery on surface-click, keys
+  server-side.
+- ✅ **Net Outages via Cloudflare Radar** — `layers/outages.js` + `/api/outages`
+  proxy; internet-outage annotations placed at country centroids (reused from the
+  borders layer), cause/scope/dates decoded. Retired the INTERNET stub.
+- ⬜ **Remaining stubs** — Power Outages (PowerOutage.us paid / EIA-930) and
+  X/social keyword search stay stubbed pending data/keys.
+
+### Theme 3 — Fidelity, cartography & boundaries *(← ACTIVE)*
+- ✅ **GPS-jamming shape fidelity** (#12 below) — DONE: `server/gpsjam.js` now
+  returns a padded convex **hull** of each cluster's H3 cells; `layers/jamming.js`
+  draws the hull polygon instead of a bounding circle.
+- ⬜ Remaining: nation highlight walls (#10), maritime/airspace boundaries (#11),
+  Google 3D Tiles (#13, key now in `.env` as `GOOGLE_MAPS_KEY`), filter polish (#14).
+
 10. **Nation highlight walls** — **click a nation's name → highlight it with a
     translucent extruded wall along its borders** (reuse the Natural Earth border
     polygons already loaded for labels).
@@ -238,13 +267,16 @@ the "S" in OSINT.
 20. **Recorded-scenario replay** — replay a saved SQLite capture offline, for
     demos and for contributors without live keys.
 
-### Recommended next 3 moves
-1. **Correlation → SITREP** (Theme 1.1) — a few hours, disproportionate payoff;
-   makes the fusion story real in the report.
-2. **Phase B** the moment the Windy + Mapillary keys arrive (Theme 2.8).
-3. **Tracking boxes** (Theme 1.3) — the most compelling *new* analytic, needs no
-   new data source, and its crossing logic is reused by airspace tracking and the
-   watchlist.
+### Recommended next 3 moves *(Theme 3)*
+1. **Nation highlight walls** (Theme 3.10) — click a nation → translucent border
+   wall. Reuses the Natural Earth polygons already loaded (`ctx.nationCentroid`
+   exists; the airspace-tripwire code already extracts per-nation rings).
+2. **Maritime & airspace boundaries** (Theme 3.11) — 12 nm / EEZ demarcation from
+   Natural Earth / Marine Regions; shared geometry with airspace tripwires.
+3. **Google Photorealistic 3D Tiles** (Theme 3.13) — key is provisioned
+   (`GOOGLE_MAPS_KEY` in `.env`, delivered client-side via a `/api/config`
+   endpoint, referrer-restricted); swap the `buildings.js` provider for
+   `3d-tiles-renderer`.
 
 ---
 
@@ -275,6 +307,13 @@ the "S" in OSINT.
 
 ## 8. Changelog (high level)
 
+- **2026-07-13** — **Theme 1 complete** (tracking boxes + airspace tripwires,
+  surveillance-orbit detector, per-nation dossier builder w/ LLM briefs,
+  pattern-of-life SQLite queries, watchlist v2, correlation→SITREP). **Theme 2
+  complete** (Windy CCTV + Mapillary street-level; Net Outages via Cloudflare
+  Radar). **Theme 3 started**: GPS-jamming zones now render the affected-cell
+  **convex hull** instead of a bounding circle. Google/Windy/Mapillary/Cloudflare
+  keys provisioned in `.env`. Debug hook gated behind `?debug`.
 - **2026-07-11** — GFW named anchorages (~14.7k) integrated into the port index
   (dark-ship + STS suppression now far more accurate); single-vessel **loitering
   detection** (≥3 h open-water) added to `analytics.js`; health strip shows LTR.

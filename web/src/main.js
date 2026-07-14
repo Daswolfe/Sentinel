@@ -1860,7 +1860,11 @@ document.getElementById('imgBtn').addEventListener('click', cycleImagery);
 ui.init(); // build sidebar + status dots (now that Alerts/Archive exist)
 makePanels(); // panels: drag title to move, click title to collapse (persisted)
 // Dev/debug handle — inspect scene + layers from the console.
-window.__argus = { scene, camera, ctx, registry, tripwires, orbitWatch, dossiers, get pivot() { return pivot; }, get camMode() { return camMode; } };
+// Dev handle (guarded): expose internals only when ?debug is in the URL.
+if (location.search.includes('debug')) {
+  window.__argus = { scene, camera, ctx, registry, tripwires, orbitWatch, dossiers,
+    get pivot() { return pivot; }, get camMode() { return camMode; } };
+}
 Alerts.armNotify();
 Archive.open();
 registry.init(); // one-time setup (aircraft trails, sea relay connection)

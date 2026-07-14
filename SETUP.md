@@ -296,6 +296,11 @@ Two files, clear split:
 | `OLLAMA_URL` / `OLLAMA_MODEL` | local LLM for intel reports (defaults `http://127.0.0.1:11434/api/generate`, `llama3.1:8b`) |
 | `AISSTREAM_KEY` | live maritime AIS |
 | `OPENSKY_ID` / `OPENSKY_SECRET` | OpenSky OAuth2 (higher aircraft limits) |
+| `FIRMS_MAP_KEY` | NASA FIRMS thermal/fire (proxied via `/api/firms`) |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare Radar internet-outage annotations (Net Outages layer, `/api/outages`) |
+| `WINDY_WEBCAMS_KEY` | Windy public webcams (CCTV layer, `/api/webcams`) |
+| `MAPILLARY_ACCESS_TOKEN` / `MAPILLARY_CLIENT_SECRET` | Mapillary street-level imagery on surface-click |
+| `GOOGLE_MAPS_KEY` | Google 2D/3D/Street View tiles (Phase D; client-side, restrict in Cloud Console) |
 
 **`web/src/config.js`** (frontend layer settings):
 
