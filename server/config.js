@@ -65,6 +65,19 @@ export const CONFIG = {
   // Cloudflare Radar API token — internet-outage annotations (Net Outages layer).
   cloudflareToken: process.env.CLOUDFLARE_API_TOKEN || '',
 
+  // Google Maps Platform key for Photorealistic 3D Tiles. Unlike the other
+  // keys this one IS delivered to the browser (via /config) — the client
+  // streams the tiles directly from Google. Restrict the key by HTTP referrer
+  // and to the "Map Tiles API" only, so exposure is contained.
+  googleMapsKey: process.env.GOOGLE_MAPS_KEY || '',
+
+  // Free-tier guard for Photorealistic 3D Tiles: Google bills per ROOT tileset
+  // request (1,000 free/month as of the 2025 pricing; ordinary tile fetches
+  // inside a session are free). Every session the client opens must first pass
+  // the backend counter, which refuses once this many root requests have been
+  // spent in the calendar month. Default leaves a 100-request safety margin.
+  googleTilesCap: Number(process.env.GOOGLE_TILES_MONTHLY_CAP || 900),
+
   // Local LLM (Ollama) for intel reports. The backend proxies to it so the
   // browser needs no CORS config — Ollama can keep its default localhost bind.
   llm: {

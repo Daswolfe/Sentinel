@@ -10,8 +10,9 @@
     "test": "node --test"
   },
   "dependencies": {
+    "3d-tiles-renderer": "^0.4.28",
     "satellite.js": "^5.0.0",
-    "three": "^0.160.0"
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "vite": "^5.4.0"

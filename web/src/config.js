@@ -101,6 +101,12 @@ const CONFIG = {
     url: "/api/streetview",
   },
   BUILDINGS: {  // 3D buildings at deep zoom (Phase D)
+    // Provider: 'osm' (extruded footprints, keyless — the default) or 'google'
+    // (Photorealistic 3D Tiles — EXPERIMENTAL, currently shelved: sessions
+    // stream and register correctly but the deep-zoom render pass conflicts;
+    // see ROADMAP §Theme 3.13). The Google path is fully billing-gated by the
+    // backend (/api/tiles-session) so re-enabling it cannot exceed the free tier.
+    provider: 'osm',
     // Provider: OSM Buildings z15 GeoJSON tiles (footprints + height/levels).
     // The key below is their public demo key — swap in your own from
     // osmbuildings.org if you hit rate limits. UPGRADE PATH: for Google

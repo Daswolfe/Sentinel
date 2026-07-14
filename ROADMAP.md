@@ -243,8 +243,22 @@ the "S" in OSINT. **All items shipped:**
   separate from the ≤250-pt tripwire rings that go to localStorage.
 - ✅ **Maritime boundaries** (#11 below) — DONE 2026-07-13 (maritime half):
   "Sea Boundaries" layer — EEZ / disputed / 24 nm / 12 nm from Marine Regions v12.
-- ⬜ Remaining: Google 3D Tiles (#13, key now in `.env` as `GOOGLE_MAPS_KEY`),
-  filter polish (#14).
+- ⏸ **Google 3D Tiles** (#13 below) — ATTEMPTED 2026-07-13, SHELVED. What
+  works and is kept in-tree: three upgraded 0.160→0.185 + `3d-tiles-renderer`
+  0.4.28; billing-gated key delivery (`/api/config` + `POST /api/tiles-session`
+  — the backend meters ROOT tileset requests, the billable unit, against a
+  persisted monthly cap of 900/1,000 free and refuses past it, token
+  auto-refresh disabled so no request can bypass the meter); ECEF→display-
+  sphere anchor transform (verified numerically exact incl. orientation);
+  sessions stream with live Google attributions; Dallas rendered fully
+  photorealistic once. UNRESOLVED: with a TilesRenderer active the main render
+  pass intermittently collapses to a single draw call → black viewport at deep
+  zoom (renderer.info showed 1 call/6k tris vs the normal ~28 calls). Needs an
+  isolated repro. Shelved behind `CONFIG.BUILDINGS.provider = 'osm'` (flip to
+  `'google'` to resume); OSM extrusions remain the active provider and were
+  re-verified at deep zoom.
+- ⬜ Remaining: filter polish (#14); resume #13 when the render-pass conflict
+  is understood.
 
 10. ✅ **Nation highlight walls** — **click a nation's name → highlight it with a
     translucent extruded wall along its borders** (reuse the Natural Earth border
@@ -278,14 +292,12 @@ the "S" in OSINT. **All items shipped:**
 20. **Recorded-scenario replay** — replay a saved SQLite capture offline, for
     demos and for contributors without live keys.
 
-### Recommended next 3 moves *(Theme 3)*
+### Recommended next 3 moves
 1. ✅ ~~**Nation highlight walls** (Theme 3.10)~~ — shipped 2026-07-13.
-2. **Maritime & airspace boundaries** (Theme 3.11) — 12 nm / EEZ demarcation from
-   Natural Earth / Marine Regions; shared geometry with airspace tripwires.
-3. **Google Photorealistic 3D Tiles** (Theme 3.13) — key is provisioned
-   (`GOOGLE_MAPS_KEY` in `.env`, delivered client-side via a `/api/config`
-   endpoint, referrer-restricted); swap the `buildings.js` provider for
-   `3d-tiles-renderer`.
+2. ✅ ~~**Maritime boundaries** (Theme 3.11)~~ — shipped 2026-07-13.
+3. **Theme 4 kick-off** — global units settings panel (#15) or contributor
+   on-ramp (#16); Theme 3 filter polish (#14) as clutter demands. Google 3D
+   Tiles (#13) stays shelved until the render-pass conflict is diagnosed.
 
 ---
 
@@ -316,6 +328,13 @@ the "S" in OSINT. **All items shipped:**
 
 ## 8. Changelog (high level)
 
+- **2026-07-14** — **Theme 3.11 shipped**: "Sea Boundaries" layer (EEZ /
+  disputed / 24 nm / 12 nm, Marine Regions v12 → 1.9 MB preprocessed index,
+  `/api/maritime`). **Theme 3.13 attempted & shelved**: Google Photorealistic
+  3D Tiles behind a hard billing gate (backend-metered root requests, 900/mo
+  cap — cannot exceed the free tier); registration + streaming verified but a
+  deep-zoom render-pass conflict remains, so OSM extrusions stay the active
+  provider (`CONFIG.BUILDINGS.provider`). three 0.160→0.185.
 - **2026-07-13 (later)** — **Nation highlight walls** (Theme 3.10): click a
   nation's name label → translucent extruded border wall (`nationwalls.js`),
   palette-coloured, multi-nation, persisted; click again to clear. Live-verified

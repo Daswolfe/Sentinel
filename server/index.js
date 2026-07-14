@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { WebSocketServer } from 'ws';
 import { CONFIG } from './config.js';
 import { AisRelay } from './ais.js';
@@ -12,6 +12,20 @@ import { getBikeshare } from './bikeshare.js';
 const relay = new AisRelay();
 let outagesCache = { t: 0, data: null }; // Cloudflare Radar outages (15-min cache)
 let maritimeCache = null; // preprocessed maritime-boundary index (static)
+
+// Google 3D Tiles free-tier meter — persisted so restarts can't reset it.
+// Counts ROOT tileset requests (the billable unit); resets each calendar month.
+const TILES_USAGE_FILE = new URL('./data/google-tiles-usage.json', import.meta.url);
+let tilesUsage = null;
+async function tilesUsageNow() {
+  if (!tilesUsage) {
+    try { tilesUsage = JSON.parse(await readFile(TILES_USAGE_FILE, 'utf8')); }
+    catch { tilesUsage = { month: '', count: 0 }; }
+  }
+  const month = new Date().toISOString().slice(0, 7);
+  if (tilesUsage.month !== month) tilesUsage = { month, count: 0 };
+  return tilesUsage;
+}
 let aisStatus = relay.enabled ? 'connecting' : 'disabled';
 relay.on('status', (s) => (aisStatus = s));
 
@@ -123,6 +137,30 @@ const server = http.createServer(async (req, res) => {
   // GPS interference — gpsjam.org daily H3 CSV, decoded, thresholded and
   // clustered into denied zones here (the browser would need an H3 library
   // and a CORS exception otherwise). ?minPct= & ?minAircraft= tune the cut.
+  // Client config — the few settings the browser needs from .env. Only the
+  // Google 3D-Tiles key crosses the wire (referrer-restricted by design);
+  // every other key stays server-side behind its proxy.
+  if (url.pathname === '/config') {
+    const u = await tilesUsageNow();
+    const open = Boolean(CONFIG.googleMapsKey) && u.count < CONFIG.googleTilesCap;
+    return json(res, 200, {
+      googleMapsKey: open ? CONFIG.googleMapsKey : '',
+      tiles3d: { used: u.count, cap: CONFIG.googleTilesCap },
+    });
+  }
+
+  // Free-tier gate: the client MUST get a ticket here before opening a Google
+  // 3D Tiles session (each session = one billable root tileset request).
+  // Refuses past the monthly cap so the key can never accrue charges.
+  if (url.pathname === '/tiles-session' && req.method === 'POST') {
+    const u = await tilesUsageNow();
+    if (!CONFIG.googleMapsKey || u.count >= CONFIG.googleTilesCap)
+      return json(res, 200, { ok: false, used: u.count, cap: CONFIG.googleTilesCap });
+    u.count++;
+    try { await writeFile(TILES_USAGE_FILE, JSON.stringify(u)); } catch {}
+    return json(res, 200, { ok: true, used: u.count, cap: CONFIG.googleTilesCap });
+  }
+
   // Maritime boundaries — preprocessed Marine Regions index (EEZ delimitation
   // lines incl. disputed, 12 nm territorial-sea + 24 nm contiguous-zone rings).
   // Static after preprocessing; built by server/data/convert-maritime.mjs.

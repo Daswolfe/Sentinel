@@ -133,13 +133,14 @@ const tiles = new TileOverlay(scene, (on) => {
   if (credit) credit.style.display = on ? 'block' : 'none';
 });
 
-// 3D buildings at deep zoom (OSM Buildings extrusions — see buildings.js for
-// the Google 3D Tiles upgrade seam). Lambert-shaded, so give the scene light
-// that Basic-material layers ignore.
+// 3D at deep zoom: Google Photorealistic 3D Tiles when a key is configured,
+// OSM Buildings extrusions otherwise (see buildings.js). Lambert-shaded, so
+// give the scene light that Basic-material layers ignore.
 scene.add(new THREE.HemisphereLight(0xdde8f0, 0x2a3743, 1.15));
 const buildings = new BuildingsOverlay(scene, (on) => {
   document.getElementById('bldgBtn')?.classList.toggle('active', on);
 });
+buildings.attachView(camera, renderer); // Google tiles need SSE from the live view
 document.getElementById('bldgBtn').addEventListener('click', () => {
   buildings.setEnabled(!buildings.enabled);
   document.getElementById('bldgBtn').classList.toggle('on', buildings.enabled);
@@ -1895,7 +1896,7 @@ makePanels(); // panels: drag title to move, click title to collapse (persisted)
 // Dev/debug handle — inspect scene + layers from the console.
 // Dev handle (guarded): expose internals only when ?debug is in the URL.
 if (location.search.includes('debug')) {
-  window.__argus = { scene, camera, ctx, registry, tripwires, orbitWatch, dossiers, nationWalls,
+  window.__argus = { scene, camera, ctx, registry, tripwires, orbitWatch, dossiers, nationWalls, buildings,
     get pivot() { return pivot; }, get camMode() { return camMode; } };
 }
 Alerts.armNotify();
@@ -1990,5 +1991,6 @@ let lastArrowRescale = 0;
       if (b) sp.scale.set(b.x * s, b.y * s, 1);
     }
   }
+  buildings.tick(); // Google 3D Tiles: per-frame SSE/LOD update (no-op for OSM)
   renderer.render(scene, camera);
 })();

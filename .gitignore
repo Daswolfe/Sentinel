@@ -6,6 +6,8 @@ dist/
 *.log
 .DS_Store
 /web/.vite/
+# runtime state — Google 3D Tiles monthly billing meter
+server/data/google-tiles-usage.json
 # runtime SQLite (server/data/wpi.json IS committed; the live DB is not)
 server/data/*.db
 server/data/*.db-wal
