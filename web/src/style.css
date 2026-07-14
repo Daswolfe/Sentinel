@@ -319,3 +319,12 @@
     .brand{font-size:15px}.statuses{display:none;}
     #searchBox{width:150px}
   }
+
+  /* Units settings popover (Theme 4.15) */
+  #unitsPop{position:fixed;top:50px;right:10px;z-index:120;width:230px;background:#101820f8;
+    border:1px solid var(--line);border-radius:4px;padding:9px 11px;backdrop-filter:blur(6px);
+    box-shadow:0 6px 22px #0009}
+  #unitsPop .up-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:5px 0}
+  #unitsPop .up-row span{font-size:10px;letter-spacing:.14em;color:var(--dim,#7d93a5)}
+  #unitsPop select{flex:1;max-width:120px}
+  #unitsPop .up-note{margin-top:7px;font-size:9px;color:var(--dim,#7d93a5);opacity:.8;text-align:right}

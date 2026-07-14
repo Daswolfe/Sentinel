@@ -19,6 +19,15 @@
   <button id="imgBtn" title="Cycle basemap: dark → HD Blue Marble (8K static) → LIVE daily MODIS">🛰 IMAGERY: OFF</button>
   <button id="radarBtn" title="Global precipitation radar (RainViewer — fuses NOAA NEXRAD + worldwide radar), animated">⛆ RADAR</button>
   <button id="bldgBtn" class="on" title="3D buildings at deep zoom (OSM Buildings extrusions — zoom below ~30 km over a city)">⌂ 3D</button>
+  <button id="unitsBtn" title="Display units — altitude, speed, distance, temperature, coordinates">⚙︎ UNITS</button>
+  <div id="unitsPop" style="display:none">
+    <div class="up-row"><span>ALTITUDE</span><select id="uAlt"><option value="ft">feet</option><option value="m">metres</option><option value="fl">flight level</option></select></div>
+    <div class="up-row"><span>SPEED</span><select id="uSpeed"><option value="kt">knots</option><option value="kmh">km/h</option><option value="mph">mph</option></select></div>
+    <div class="up-row"><span>DISTANCE</span><select id="uDist"><option value="nm">nautical mi</option><option value="km">km</option><option value="mi">statute mi</option></select></div>
+    <div class="up-row"><span>TEMP</span><select id="uTemp"><option value="C">°C</option><option value="F">°F</option></select></div>
+    <div class="up-row"><span>COORDS</span><select id="uCoord"><option value="dd">decimal°</option><option value="dms">D°M′S″</option></select></div>
+    <div class="up-note">applies as each feed refreshes</div>
+  </div>
   <span id="radarTime"></span>
   <div class="statuses" id="statuses"></div>
   <div id="healthStrip" title="Backend feed health (from /health)"></div>

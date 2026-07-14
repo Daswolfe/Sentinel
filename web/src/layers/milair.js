@@ -1,5 +1,6 @@
 import { CONFIG } from '../config.js';
 import { acCategory } from '../contactFilters.js';
+import { fmtAlt, fmtSpeed, fmtLat, fmtLon } from '../units.js';
 
 // Military aircraft from adsb.lol's /v2/mil feed (via the backend proxy — the
 // API is CORS-blocked in-browser). Global, keyless, ~250 aircraft. Same readsb
@@ -53,10 +54,10 @@ export default {
             'TYPE CODE': a.t || '—',
             REG: a.r || '—',
             CALLSIGN: cs || '—',
-            LAT: a.lat.toFixed(2) + '°',
-            LON: a.lon.toFixed(2) + '°',
-            ALT: typeof a.alt_baro === 'number' ? a.alt_baro.toLocaleString() + ' ft' : (a.alt_baro || '—'),
-            GS: a.gs != null ? a.gs.toFixed(0) + ' kt' : '—',
+            LAT: fmtLat(a.lat),
+            LON: fmtLon(a.lon),
+            ALT: typeof a.alt_baro === 'number' ? fmtAlt(a.alt_baro) : (a.alt_baro || '—'),
+            GS: fmtSpeed(a.gs),
             TRACK: a.track != null ? a.track.toFixed(0) + '°' : '—',
             SQUAWK: a.squawk || '—',
             SOURCE: 'adsb.lol military feed',

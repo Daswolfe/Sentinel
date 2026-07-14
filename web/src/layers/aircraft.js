@@ -1,5 +1,6 @@
 import { CONFIG } from '../config.js';
 import { acCategory } from '../contactFilters.js';
+import { fmtAlt, fmtSpeed, fmtLat, fmtLon } from '../units.js';
 
 // Aircraft from OpenSky (via backend proxy) or a local ADS-B receiver.
 // Region-aware: narrows to a bounding box when a region is focused. Handles
@@ -50,10 +51,10 @@ export default {
             rows: {
               TYPE: 'AIRCRAFT (local RX)',
               ICAO24: a.hex,
-              LAT: a.lat.toFixed(2) + '°',
-              LON: a.lon.toFixed(2) + '°',
-              ALT: (a.alt_baro || 0).toFixed(0) + ' ft',
-              GS: a.gs != null ? a.gs.toFixed(0) + ' kt' : '—',
+              LAT: fmtLat(a.lat),
+              LON: fmtLon(a.lon),
+              ALT: fmtAlt(a.alt_baro ?? a.alt_geom),
+              GS: fmtSpeed(a.gs),
               SQUAWK: a.squawk || '—',
               SOURCE: 'Own ADS-B receiver',
             },
@@ -116,12 +117,12 @@ export default {
             TYPE: 'AIRCRAFT',
             ICAO24: s[0],
             ORIGIN: s[2] || '—',
-            LAT: lat.toFixed(2) + '°',
-            LON: lon.toFixed(2) + '°',
-            // Canonical display unit = feet (OpenSky reports metres; normalized
-            // here so all aircraft feeds read consistently, matching altFt).
-            ALT: Math.round(alt * 3280.84).toLocaleString() + ' ft',
-            GS: s[9] != null ? (s[9] * 1.944).toFixed(0) + ' kt' : '—',
+            LAT: fmtLat(lat),
+            LON: fmtLon(lon),
+            // Canonical internal unit = feet (OpenSky reports metres); the
+            // units helpers convert to the user's display preference.
+            ALT: fmtAlt(alt * 3280.84),
+            GS: fmtSpeed(s[9] != null ? s[9] * 1.944 : null),
             HDG: s[10] != null ? s[10].toFixed(0) + '°' : '—',
             SQUAWK: s[14] || '—',
             SOURCE: 'OpenSky ADS-B',

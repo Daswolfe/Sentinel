@@ -1,5 +1,6 @@
 import { CONFIG } from '../config.js';
 import { connectMaritime } from './maritime.js';
+import { fmtSpeed, fmtLat, fmtLon } from '../units.js';
 
 // SEA + DARK layers. Prefers the live backend AIS relay; falls back to a
 // self-contained simulation on real chokepoint lanes when the relay is down.
@@ -37,9 +38,9 @@ function seaMeta(v) {
         TYPE: 'VESSEL (LIVE AIS)',
         MMSI: v.mmsi,
         'SHIP TYPE': v.type ?? '—',
-        LAT: v.lat.toFixed(3) + '°',
-        LON: v.lon.toFixed(3) + '°',
-        SOG: v.sog != null ? v.sog.toFixed(1) + ' kt' : '—',
+        LAT: fmtLat(v.lat),
+        LON: fmtLon(v.lon),
+        SOG: fmtSpeed(v.sog),
         COG: v.cog != null ? v.cog.toFixed(0) + '°' : '—',
         DEST: v.destination ?? '—',
         SOURCE: 'aisstream.io (via backend)',
@@ -63,8 +64,8 @@ function darkMeta(v) {
       return (this._r ??= {
         TYPE: 'AIS BLACKOUT',
         MMSI: v.mmsi,
-        'LAST LAT': v.lat.toFixed(3) + '°',
-        'LAST LON': v.lon.toFixed(3) + '°',
+        'LAST LAT': fmtLat(v.lat),
+        'LAST LON': fmtLon(v.lon),
         'WENT DARK': v.darkAt ? new Date(v.darkAt).toUTCString() : '—',
         NOTE: 'Transponder silent while underway — possible evasion',
         SOURCE: 'Derived (live AIS)',

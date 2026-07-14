@@ -16,6 +16,7 @@ import {
   addToWatchlist, removeFromWatchlist, matchesWatchlist, watchlistTerm,
 } from './contactFilters.js';
 import { textSprite } from './labels.js';
+import { UNITS, setUnit, fmtSpeed, fmtTemp, fmtLat, fmtLon } from './units.js';
 
 // Layer modules — each is a self-contained data source. Adding a new layer is:
 // write a module, import it, drop it in the addAll() list below.
@@ -1058,7 +1059,7 @@ function pick(e) {
     ui.showDetail({
       layer: 'WX',
       headline: 'SURFACE POINT',
-      rows: { LAT: lat.toFixed(3) + '°', LON: lon.toFixed(3) + '°', WEATHER: 'querying…' },
+      rows: { LAT: fmtLat(lat), LON: fmtLon(lon), WEATHER: 'querying…' },
       html: '<div id="streetview"></div>',
     });
     weatherAt(lat, lon)
@@ -1068,16 +1069,17 @@ function pick(e) {
             layer: 'WX',
             headline: 'SURFACE POINT — WX',
             rows: {
-              LAT: lat.toFixed(3) + '°',
-              LON: lon.toFixed(3) + '°',
-              TEMP: w.temperature_2m + ' °C',
-              WIND: w.wind_speed_10m + ' km/h @ ' + w.wind_direction_10m + '°',
+              LAT: fmtLat(lat),
+              LON: fmtLon(lon),
+              TEMP: fmtTemp(w.temperature_2m),
+              // Open-Meteo reports km/h; canonical internal speed is kt.
+              WIND: fmtSpeed(w.wind_speed_10m / 1.852) + ' @ ' + w.wind_direction_10m + '°',
               CLOUD: w.cloud_cover + ' %',
               PRECIP: w.precipitation + ' mm',
               SOURCE: 'Open-Meteo',
             },
             html:
-              windRose(w.wind_direction_10m, `${w.wind_speed_10m} km/h`) +
+              windRose(w.wind_direction_10m, fmtSpeed(w.wind_speed_10m / 1.852)) +
               wmoDesc(w.weather_code) +
               '<div id="streetview"></div>',
           });
@@ -1286,8 +1288,8 @@ async function renderMetar(apt) {
       'clear';
     const wind =
       o.wdir === 'VRB'
-        ? `variable @ ${o.wspd ?? 0} kt`
-        : `${o.wdir ?? '—'}° @ ${o.wspd ?? 0} kt${o.wgst ? ` gust ${o.wgst}` : ''}`;
+        ? `variable @ ${fmtSpeed(o.wspd ?? 0)}`
+        : `${o.wdir ?? '—'}° @ ${fmtSpeed(o.wspd ?? 0)}${o.wgst ? ` gust ${fmtSpeed(o.wgst)}` : ''}`;
     el().innerHTML =
       `<div style="color:var(--amber);margin-bottom:4px">METAR — DECODED</div>` +
       windRose(o.wdir === 'VRB' ? null : o.wdir, `${o.wspd ?? 0} kt${o.wgst ? ' G' + o.wgst : ''}`) +
@@ -1295,7 +1297,7 @@ async function renderMetar(apt) {
       kv('VISIBILITY', o.visib != null ? String(o.visib).replace('+', '≥') + ' sm' : '—') +
       (o.wxString ? kv('WEATHER', decodeWx(o.wxString)) : '') +
       kv('CLOUDS', clouds) +
-      kv('TEMP / DEWPOINT', `${o.temp ?? '—'} °C / ${o.dewp ?? '—'} °C`) +
+      kv('TEMP / DEWPOINT', `${fmtTemp(o.temp)} / ${fmtTemp(o.dewp)}`) +
       kv('ALTIMETER', o.altim ? Math.round(o.altim) + ' hPa' : '—') +
       kv('OBSERVED', o.reportTime ? o.reportTime + 'Z' : '—') +
       `<div class="metar-raw">${o.rawOb ?? ''}</div>` +
@@ -1433,6 +1435,27 @@ let nationNamesOn = true;
 document.getElementById('lblNations').addEventListener('change', (e) => {
   nationNamesOn = e.target.checked;
 });
+
+/* ═══════════════ UNITS SETTINGS (Theme 4.15) ══════════════════ */
+{
+  const pop = document.getElementById('unitsPop');
+  const map = { uAlt: 'alt', uSpeed: 'speed', uDist: 'dist', uTemp: 'temp', uCoord: 'coord' };
+  for (const [id, key] of Object.entries(map)) {
+    const sel = document.getElementById(id);
+    sel.value = UNITS[key];
+    sel.addEventListener('change', () => {
+      setUnit(key, sel.value);
+      ui.tick(`Units — ${key} → ${sel.options[sel.selectedIndex].text} (applies as feeds refresh)`);
+    });
+  }
+  document.getElementById('unitsBtn').addEventListener('click', (e) => {
+    pop.style.display = pop.style.display === 'none' ? 'block' : 'none';
+    e.stopPropagation();
+  });
+  addEventListener('pointerdown', (e) => {
+    if (!pop.contains(e.target) && e.target.id !== 'unitsBtn') pop.style.display = 'none';
+  });
+}
 
 /* ═══════════════ CONTACT FILTERS + SEARCH ═════════════════════ */
 ctx.contactFilter = contactPasses;
