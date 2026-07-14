@@ -111,6 +111,7 @@ const server = http.createServer(async (req, res) => {
       ok: true,
       ais: {
         enabled: relay.enabled,
+        mode: relay.mode, // live | record | replay
         status: aisStatus,
         tracked: relay.vessels.size,
         ports: relay.ports.count,

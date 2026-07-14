@@ -106,3 +106,46 @@ test('ingest parses the captured aisstream fixture', async () => {
   assert.equal(v.heading, 230);
   assert.equal(v.track.length, 1, 'first fix lands in the breadcrumb track');
 });
+
+test('recorded-scenario replay drives the real ingest path from a capture file', async () => {
+  const fs = await import('node:fs/promises');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const { CONFIG } = await import('./config.js');
+  const { AisRelay } = await import('./ais.js');
+  const fixture = JSON.parse(
+    await fs.readFile(new URL('./fixtures/aisstream-position-report.json', import.meta.url), 'utf8'),
+  );
+  // Three-message capture: same vessel moving north, 1 s apart on the tape.
+  const t0 = Date.now() - 60_000;
+  const lines = [0, 1, 2].map((i) => {
+    const m = structuredClone(fixture);
+    m.MetaData.latitude = 1.2466 + i * 0.01;
+    return JSON.stringify({ t: t0 + i * 1000, m });
+  });
+  const file = path.join(await fs.mkdtemp(path.join(os.tmpdir(), 'argus-replay-')), 'cap.ndjson');
+  await fs.writeFile(file, lines.join('\n') + '\n');
+
+  const saved = { replay: CONFIG.ais.replay, speed: CONFIG.ais.replaySpeed, key: CONFIG.aisstreamKey };
+  CONFIG.ais.replay = file;
+  CONFIG.ais.replaySpeed = 1000; // 3 s of tape ≈ 3 ms of wall clock
+  const relay = new AisRelay();
+  try {
+    assert.equal(relay.enabled, true, 'replay mode needs no aisstream key');
+    assert.equal(relay.mode, 'replay');
+    relay.start();
+    // Wait for the tape to play through (well under a second at 1000×).
+    const until = Date.now() + 2000;
+    while (Date.now() < until && (relay.vessels.get(563012345)?.reports ?? 0) < 3)
+      await new Promise((r) => setTimeout(r, 20));
+    const v = relay.vessels.get(563012345);
+    assert.ok(v, 'vessel materialized from the capture');
+    assert.equal(v.reports >= 3, true, 'all three taped messages ingested');
+    assert.ok(Math.abs(v.lat - 1.2666) < 1e-9, 'latest position wins');
+  } finally {
+    relay.stop();
+    CONFIG.ais.replay = saved.replay;
+    CONFIG.ais.replaySpeed = saved.speed;
+    CONFIG.aisstreamKey = saved.key;
+  }
+});

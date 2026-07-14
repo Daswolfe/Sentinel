@@ -983,6 +983,7 @@ async function pollHealth() {
     const h = await (await fetch('/api/health')).json();
     const s = h.ais?.stats ?? {};
     el.textContent =
+      (h.ais?.mode === 'replay' ? 'REPLAY · ' : '') +
       `AIS ${(h.ais?.tracked ?? 0).toLocaleString()} · ` +
       `DARK ${s.darkFlagged ?? 0}⚑ ${s.darkSuppressed ?? 0}⌀ · ` +
       `STS ${h.analytics?.stsAlerts ?? 0} · LTR ${h.analytics?.loiterAlerts ?? 0} · ` +

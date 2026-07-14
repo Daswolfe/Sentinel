@@ -96,6 +96,16 @@ export const CONFIG = {
   ais: {
     endpoint: 'wss://stream.aisstream.io/v0/stream',
 
+    // Recorded-scenario capture + replay (Theme 4.20). AIS_RECORD taps the
+    // live feed to an NDJSON file ({"t":epochMs,"m":<raw aisstream msg>} per
+    // line). AIS_REPLAY plays such a file back through the real ingest path —
+    // no aisstream key needed — looping at EOF; AIS_REPLAY_SPEED is a time
+    // multiplier (10 = an hour of capture in six minutes). Paths resolve
+    // against the server/ directory.
+    record: process.env.AIS_RECORD || '',
+    replay: process.env.AIS_REPLAY || '',
+    replaySpeed: Math.max(0.1, Number(process.env.AIS_REPLAY_SPEED || 1)),
+
     // aisstream bounding boxes: [[ [latMin,lonMin], [latMax,lonMax] ], ...]
     // GLOBAL subscription — everything aisstream hears, worldwide, tiled into
     // 8 quadrant boxes. NOTE: aisstream's free feed is volunteer TERRESTRIAL

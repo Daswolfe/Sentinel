@@ -1,7 +1,15 @@
 import { EventEmitter } from 'node:events';
+import { createReadStream, createWriteStream } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+import readline from 'node:readline';
 import WebSocket from 'ws';
 import { CONFIG } from './config.js';
 import { loadPorts } from './ports.js';
+
+const here = dirname(fileURLToPath(import.meta.url));
+// Capture/replay paths from .env resolve against server/, not the launch cwd.
+const dataPath = (p) => resolve(here, p);
 
 const KTS_MIN = CONFIG.ais.underwaySog;
 const DARK_MS = CONFIG.ais.darkThresholdMin * 60_000;
@@ -45,8 +53,13 @@ export class AisRelay extends EventEmitter {
     this.stats = { messages: 0, darkFlagged: 0, darkSuppressed: 0, resurfaced: 0 };
   }
 
+  // Replay mode needs no aisstream key — the file IS the feed.
   get enabled() {
-    return Boolean(CONFIG.aisstreamKey);
+    return Boolean(CONFIG.aisstreamKey || CONFIG.ais.replay);
+  }
+
+  get mode() {
+    return CONFIG.ais.replay ? 'replay' : CONFIG.ais.record ? 'record' : 'live';
   }
 
   start() {
@@ -56,7 +69,10 @@ export class AisRelay extends EventEmitter {
     }
     if (this.started) return;
     this.started = true;
-    this._connect();
+    if (CONFIG.ais.record && !CONFIG.ais.replay)
+      this._rec = createWriteStream(dataPath(CONFIG.ais.record), { flags: 'a' });
+    if (CONFIG.ais.replay) this._startReplay();
+    else this._connect();
     this._scanTimer = setInterval(() => this._scanDark(), CONFIG.ais.scanIntervalMs);
     this._castTimer = setInterval(() => this._broadcast(), CONFIG.ais.broadcastMs);
     this._evictTimer = setInterval(() => this._evict(), 5 * 60_000);
@@ -67,7 +83,55 @@ export class AisRelay extends EventEmitter {
     clearInterval(this._castTimer);
     clearInterval(this._evictTimer);
     if (this.ws) this.ws.close();
+    if (this._rec) { this._rec.end(); this._rec = null; }
     this.started = false;
+  }
+
+  /* ── recorded-scenario replay (Theme 4.20) ─────────────────────────
+   * Streams an NDJSON capture ({"t":epochMs,"m":<raw aisstream msg>} per
+   * line) through the SAME _ingest path as the live websocket, honouring the
+   * recorded inter-message gaps ÷ replaySpeed. Loops at EOF with a clean
+   * vessel table so back-jumping positions can't fire bogus resurface alerts.
+   */
+  async _startReplay() {
+    const path = dataPath(CONFIG.ais.replay);
+    const speed = CONFIG.ais.replaySpeed;
+    this.emit('status', 'ok');
+    while (this.started) {
+      let t0 = null;
+      const wall0 = Date.now();
+      try {
+        const rl = readline.createInterface({
+          input: createReadStream(path),
+          crlfDelay: Infinity,
+        });
+        for await (const line of rl) {
+          if (!this.started) return;
+          let rec;
+          try { rec = JSON.parse(line); } catch { continue; }
+          if (rec?.t == null || !rec.m) continue;
+          t0 ??= rec.t;
+          const wait = wall0 + (rec.t - t0) / speed - Date.now();
+          if (wait > 5) await new Promise((r) => setTimeout(r, wait));
+          this._ingest(rec.m);
+        }
+      } catch (e) {
+        this.emit('status', 'error');
+        console.log(`  • AIS   replay failed: ${e.message}`);
+        return;
+      }
+      if (t0 == null) {
+        this.emit('status', 'error');
+        console.log('  • AIS   replay file empty or not NDJSON capture format');
+        return;
+      }
+      // Tape rewind: hold the final picture briefly, then start clean so the
+      // back-jump to the first frame can't fire bogus resurface alerts (and a
+      // tiny capture can't hot-loop the process).
+      await new Promise((r) => setTimeout(r, 2000));
+      this.vessels.clear();
+      this.dirty.clear();
+    }
   }
 
   _connect() {
@@ -94,6 +158,8 @@ export class AisRelay extends EventEmitter {
       } catch {
         return;
       }
+      // Scenario capture: raw message + arrival time, one JSON per line.
+      if (this._rec) this._rec.write(`{"t":${Date.now()},"m":${JSON.stringify(msg)}}\n`);
       this._ingest(msg);
     });
 

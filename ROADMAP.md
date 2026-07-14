@@ -301,16 +301,21 @@ the "S" in OSINT. **All items shipped:**
     reads X-Forwarded-For behind a reverse proxy. Verified: burst of 310 →
     exactly 300×200 + 10×429.
 19. **Tauri desktop app** — ~10 MB native shell, Node backend as sidecar.
-20. **Recorded-scenario replay** — replay a saved SQLite capture offline, for
-    demos and for contributors without live keys.
+20. ✅ **Recorded-scenario replay** — DONE 2026-07-14. Message-level NDJSON
+    capture instead of the SQLite fixes (those are 5-min breadcrumbs with no
+    name/sog/type — too lossy to drive the dark-ship engine): `AIS_RECORD=`
+    taps the live feed to a file; `AIS_REPLAY=` plays it back through the real
+    ingest path (dark/STS/loitering all run) with NO key needed, honouring
+    recorded gaps ÷ `AIS_REPLAY_SPEED`, looping at EOF with a 2 s rewind +
+    clean vessel table. `/health` reports `ais.mode: live|record|replay`; the
+    health strip shows REPLAY. Bundled demo tape:
+    `server/data/demo-scenario.ndjson` (Europe/Med box). Unit-tested.
 
 ### Recommended next 3 moves
-1. **Recorded-scenario replay** (#20) — replay a saved SQLite capture offline;
-   also unlocks demos without live keys.
-2. **Tauri desktop app** (#19) — needs the Rust toolchain on the dev box.
-3. **Density cap filter** (§7 leftover) — "top N by relevance in view";
-   diagnose the shelved Google 3D Tiles render-pass conflict (#13) when
-   convenient.
+1. **Tauri desktop app** (#19) — needs the Rust toolchain on the dev box.
+2. **Density cap filter** (§7 leftover) — "top N by relevance in view".
+3. **Diagnose the shelved Google 3D Tiles render-pass conflict** (#13) when
+   convenient; user feature request §9.1 (dark-ship pulse ring) also open.
 
 ---
 
