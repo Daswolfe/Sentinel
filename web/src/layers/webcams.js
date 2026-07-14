@@ -33,10 +33,14 @@ export default {
     const region = ctx.region();
     const lat = region?.lat ?? ctx.viewLat;
     const lon = region?.lon ?? ctx.viewLon;
-    if (lat == null || lon == null) return;
+    // Zoomed way out (or view centre unknown): a 200 km circle is almost always
+    // empty ocean — ask the backend for a global popular-cams sweep instead.
+    const global = lat == null || (!region && (ctx.viewAlt ?? 999) > 30);
     ctx.ui.status('CCTV', 'wait');
     try {
-      const u = `${CONFIG.CCTV.url}?lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}&radius=${CONFIG.CCTV.radiusKm}`;
+      const u = global
+        ? CONFIG.CCTV.url
+        : `${CONFIG.CCTV.url}?lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}&radius=${CONFIG.CCTV.radiusKm}`;
       const j = await (await fetch(u)).json();
       const cams = j.webcams || [];
       const pos = new Float32Array(cams.length * 3);
@@ -66,7 +70,11 @@ export default {
       });
       ctx.setLayerData('CCTV', pos, meta);
       ctx.ui.status('CCTV', cams.length ? 'ok' : 'off');
-      ctx.ui.info(`Webcams — ${cams.length} within ${CONFIG.CCTV.radiusKm} km of ${lat.toFixed(1)}, ${lon.toFixed(1)}`);
+      ctx.ui.info(
+        global
+          ? `Webcams — ${cams.length} popular worldwide (zoom in or focus a region for local cams)`
+          : `Webcams — ${cams.length} within ${CONFIG.CCTV.radiusKm} km of ${lat.toFixed(1)}, ${lon.toFixed(1)}`,
+      );
       if (!cams.length && j.note) ctx.ui.tick(`Webcams: ${j.note}`);
     } catch (e) {
       ctx.ui.status('CCTV', 'err');

@@ -134,6 +134,9 @@
     font-size:10px;letter-spacing:.08em;padding:5px 8px;border-radius:3px;cursor:pointer}
   #bldgBtn.on{border-color:var(--cyan);color:var(--cyan)}
   #bldgBtn.active{background:#12222c}
+  #unitsBtn{background:#0c1319;border:1px solid var(--line);color:var(--dim);font-family:var(--mono);
+    font-size:10px;letter-spacing:.08em;padding:5px 8px;border-radius:3px;cursor:pointer}
+  #unitsBtn.on{border-color:var(--cyan);color:var(--cyan)}
   #alerts{right:14px;top:74px;width:296px;max-height:32vh;display:flex;flex-direction:column}
   #alerts .body{padding:6px 10px;overflow-y:auto}
   .alert{font-size:10px;line-height:1.5;padding:5px 0;border-bottom:1px dashed #172430;color:var(--ink)}
@@ -264,11 +267,12 @@
   #searchBox{background:#0c1319;border:1px solid var(--line);color:var(--ink);font-family:var(--mono);
     font-size:10px;letter-spacing:.05em;padding:5px 9px;border-radius:3px;outline:none;width:250px}
   #searchBox:focus{border-color:var(--amber)}
-  /* contact filters row */
-  #contactFilters select,#contactFilters2 select{background:#0c1319;border:1px solid var(--line);color:var(--dim);
+  /* contact filters rows (all of them) + units popover — one shared select theme */
+  .filters select,#unitsPop select{background:#0c1319;border:1px solid var(--line);color:var(--dim);
     font-family:var(--mono);font-size:9px;padding:3px 4px;border-radius:3px;cursor:pointer}
-  #contactFilters label{cursor:pointer;display:flex;align-items:center;gap:4px}
-  #contactFilters input[type=checkbox]{accent-color:var(--amber)}
+  .filters select:focus,#unitsPop select:focus{outline:none;border-color:var(--amber)}
+  .filters label{cursor:pointer;display:flex;align-items:center;gap:4px}
+  .filters input[type=checkbox]{accent-color:var(--amber)}
   /* alert ack/delete */
   #alerts h2 #ackAll{margin-left:auto;font-size:9px;color:var(--dim);cursor:pointer;letter-spacing:.1em}
   #alerts h2 #ackAll:hover{color:var(--green)}

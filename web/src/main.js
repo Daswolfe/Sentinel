@@ -1448,12 +1448,18 @@ document.getElementById('lblNations').addEventListener('change', (e) => {
       ui.tick(`Units — ${key} → ${sel.options[sel.selectedIndex].text} (applies as feeds refresh)`);
     });
   }
-  document.getElementById('unitsBtn').addEventListener('click', (e) => {
-    pop.style.display = pop.style.display === 'none' ? 'block' : 'none';
+  const btn = document.getElementById('unitsBtn');
+  btn.addEventListener('click', (e) => {
+    const open = pop.style.display === 'none';
+    pop.style.display = open ? 'block' : 'none';
+    btn.classList.toggle('on', open);
     e.stopPropagation();
   });
   addEventListener('pointerdown', (e) => {
-    if (!pop.contains(e.target) && e.target.id !== 'unitsBtn') pop.style.display = 'none';
+    if (!pop.contains(e.target) && e.target.id !== 'unitsBtn') {
+      pop.style.display = 'none';
+      btn.classList.remove('on');
+    }
   });
 }
 
@@ -1986,6 +1992,7 @@ let lastArrowRescale = 0;
     buildings.update(lat, lon, cr - R);
     ctx.viewLat = lat; // current view centre — used by the lazy webcams layer
     ctx.viewLon = lon;
+    ctx.viewAlt = cr - R; // globe units; webcams switch to a global sweep when high
   }
   const lowAlt = cr - R < 1.5;
   gratGrp.visible = !lowAlt;

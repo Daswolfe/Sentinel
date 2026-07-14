@@ -333,16 +333,21 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // Public webcams near a point (Windy Webcams v3) — key injected server-side.
+  // Public webcams (Windy Webcams v3) — key injected server-side. With lat/lon
+  // it returns cams near that point; without, a global popular-cams sweep (the
+  // client uses that when zoomed way out, where a 200 km nearby circle is
+  // usually empty ocean).
   if (url.pathname === '/webcams') {
     if (!CONFIG.windyKey) return json(res, 200, { webcams: [], note: 'no WINDY_WEBCAMS_KEY' });
-    const lat = Number(url.searchParams.get('lat'));
-    const lon = Number(url.searchParams.get('lon'));
+    // parseFloat, not Number: Number(null) is 0, which would silently turn a
+    // missing lat/lon into a nearby=0,0 query (Null Island — total 2 webcams).
+    const lat = parseFloat(url.searchParams.get('lat'));
+    const lon = parseFloat(url.searchParams.get('lon'));
     const radius = Math.min(500, Math.max(5, Number(url.searchParams.get('radius')) || 200));
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return json(res, 400, { error: 'bad lat/lon' });
+    const nearby = Number.isFinite(lat) && Number.isFinite(lon) ? `&nearby=${lat},${lon},${radius}` : '';
     try {
       const r = await fetch(
-        `https://api.windy.com/webcams/api/v3/webcams?nearby=${lat},${lon},${radius}&limit=50&include=images,location,urls`,
+        `https://api.windy.com/webcams/api/v3/webcams?limit=50&sortKey=popularity&sortDirection=desc&include=images,location,urls${nearby}`,
         { headers: { 'x-windy-api-key': CONFIG.windyKey } },
       );
       const j = await r.json();
