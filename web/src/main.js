@@ -13,7 +13,7 @@ import { OrbitWatch } from './orbitwatch.js';
 import { Dossiers } from './dossiers.js';
 import { runwayDiagram } from './runways.js';
 import {
-  FILTER, contactPasses, NAT_OPTIONS,
+  FILTER, contactPasses, NAT_OPTIONS, relevance,
   addToWatchlist, removeFromWatchlist, matchesWatchlist, watchlistTerm,
 } from './contactFilters.js';
 import { textSprite } from './labels.js';
@@ -1468,6 +1468,7 @@ document.getElementById('lblNations').addEventListener('change', (e) => {
 
 /* ═══════════════ CONTACT FILTERS + SEARCH ═════════════════════ */
 ctx.contactFilter = contactPasses;
+ctx.relevance = relevance; // density-cap scoring (top-N by relevance)
 const fNat = document.getElementById('fNat');
 for (const [code, label] of Object.entries(NAT_OPTIONS))
   fNat.insertAdjacentHTML('beforeend', `<option value="${code}">${label}</option>`);
@@ -1485,10 +1486,11 @@ function applyContactFilters() {
   FILTER.stage = document.getElementById('fStage').value;
   FILTER.constellation = document.getElementById('fConst').value;
   FILTER.fastOnly = document.getElementById('fFast').checked;
+  ctx.densityCap = +document.getElementById('fDensity').value || 0;
   ctx.refilterAll();
 }
 for (const id of ['fNat', 'fMil', 'fWatch', 'fMove', 'fAlt', 'fOrbit',
-                  'fShip', 'fDark', 'fEmerg', 'fCat', 'fStage', 'fConst', 'fFast'])
+                  'fShip', 'fDark', 'fEmerg', 'fCat', 'fStage', 'fConst', 'fFast', 'fDensity'])
   document.getElementById(id).addEventListener('change', applyContactFilters);
 
 // Contact search: Enter finds the first vessel/aircraft/airport/satellite

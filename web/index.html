@@ -75,6 +75,9 @@
       <option value="all">SAT: ALL</option><option value="starlink">STARLINK</option><option value="oneweb">ONEWEB</option><option value="iridium">IRIDIUM</option><option value="gps">GPS</option><option value="glonass">GLONASS</option><option value="galileo">GALILEO</option><option value="beidou">BEIDOU</option>
     </select>
     <label title="Only fast movers >600 kt ground speed (intercept watching); unknown speed hidden"><input type="checkbox" id="fFast"> &gt;600KT</label>
+    <select id="fDensity" title="Density cap — keep only the top-N most relevant contacts per mover layer (watchlist > emergency > dark > military > fast)">
+      <option value="0">DENS: ALL</option><option value="2000">TOP 2000</option><option value="1000">TOP 1000</option><option value="500">TOP 500</option><option value="250">TOP 250</option>
+    </select>
   </div>
   <div class="legend">
     <span><b class="ok">LIVE</b> real data</span>

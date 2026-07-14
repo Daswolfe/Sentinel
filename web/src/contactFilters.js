@@ -287,6 +287,29 @@ export function contactPasses(m, layerId) {
   return true;
 }
 
+// Relevance score for the density cap — when a layer plots more contacts than
+// the cap, the top-N by this score stay visible instead of an arbitrary slice.
+// Watched contacts always win, then emergencies, dark ships, military, fast
+// movers, and finally anything underway over the anchored/parked remainder.
+export function relevance(m, layerId) {
+  let s = 0;
+  if (isNotable(m, FILTER.watchlist)) s += 100;
+  // Squawk lives in rows, which is a LAZY getter on vessels (building it for
+  // 10k+ contacts per plot defeats the laziness) — only aircraft have squawks.
+  if (AIRBORNE.has(layerId)) {
+    const sq = m.rows?.SQUAWK;
+    if (sq === '7500' || sq === '7600' || sq === '7700') s += 60;
+  }
+  if (layerId === 'DARK') s += 50;
+  if (isMilitary(m)) s += 30;
+  const kt = m.ktGs ?? m.sog;
+  if (kt != null) {
+    if (kt > 600) s += 15;
+    else if (kt >= (m.altFt != null ? 30 : 0.5)) s += 5;
+  }
+  return s;
+}
+
 // Countries offered in the NAT dropdown (code → label).
 export const NAT_OPTIONS = {
   US: 'USA', RU: 'RUSSIA', CN: 'CHINA', GB: 'UK', DE: 'GERMANY', FR: 'FRANCE',

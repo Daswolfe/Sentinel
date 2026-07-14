@@ -313,10 +313,10 @@ the "S" in OSINT. **All items shipped:**
     `server/data/demo-scenario.ndjson` (Europe/Med box). Unit-tested.
 
 ### Recommended next 3 moves
-1. **Tauri desktop app** (#19) — needs the Rust toolchain on the dev box.
-2. **Density cap filter** (§7 leftover) — "top N by relevance in view".
-3. **Diagnose the shelved Google 3D Tiles render-pass conflict** (#13) when
-   convenient; user feature request §9.1 (dark-ship pulse ring) also open.
+1. **Tauri desktop app** (#19) — blocked on installing the Rust toolchain.
+2. **Diagnose the shelved Google 3D Tiles render-pass conflict** (#13).
+3. **Contributor on-ramp** (#16) — currently shelved per operator; everything
+   else in Themes 1–4 and the §7 filter backlog is shipped.
 
 ---
 
@@ -341,12 +341,23 @@ category (light/large/heavy/hi-perf/rotor — adsb.lol `category` + OpenSky
 ✅ constellation (Starlink/OneWeb/Iridium/GPS/GLONASS/Galileo/BeiDou by TLE
 name), ✅ route stage (climb/cruise/descent, ±300 ft/min).
 
-- **Density cap** — "top N by relevance in view" instead of hard toggles.
+- ✅ **Density cap** — DONE 2026-07-14: DENS filter keeps the top-N per mover
+  layer (SAT/AIR/MILAIR/SEA) scored watchlist > emergency > dark > military >
+  fast > underway (`relevance()` in contactFilters.js).
   (Deferred: needs a relevance score across layers.)
 
 ---
 
 ## 8. Changelog (high level)
+
+- **2026-07-14 (later)** — **Theme 4 effectively complete**: recorded-scenario
+  replay (#20, AIS_RECORD/AIS_REPLAY NDJSON tape through the real ingest path +
+  bundled Europe demo tape + REPLAY health badge); dark-ship pulse beacons
+  (user request §9.1, instanced sonar rings); density-cap filter (§7, top-N by
+  relevance). Fixed: new filter rows + units popover theming, webcams
+  Null-Island fallback bug (Number(null)===0), stale orphan backend on :8787.
+  Tauri (#19) blocked on missing Rust toolchain; contributor on-ramp (#16)
+  shelved per operator.
 
 - **2026-07-14 (later)** — **Theme 3 complete** (filter backlog shipped: ship
   class, aircraft category, emergency-only, fast-mover, dark-duration,

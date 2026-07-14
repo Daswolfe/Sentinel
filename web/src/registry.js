@@ -11,6 +11,10 @@ const orientedKind = (glyph) => DIRECTIONAL[glyph] || null;
 
 const _mat4 = new THREE.Matrix4(); // reused per-instance transform (no per-plot alloc)
 
+// Layers the density cap applies to — the bulky movers. Cartography, alerts,
+// and sparse event layers always plot in full.
+const DENSITY_CAPPED = new Set(['SAT', 'AIR', 'MILAIR', 'SEA']);
+
 /**
  * Layer architecture
  * ──────────────────
@@ -152,6 +156,22 @@ export class LayerContext {
         pos = new Float32Array(keepPos);
         meta = keepMeta;
       }
+    }
+    // Density cap: over the limit, keep the top-N by relevance instead of an
+    // arbitrary slice. Only the bulky mover layers participate; the host sets
+    // densityCap + relevance (contactFilters) like it sets contactFilter.
+    if (this.densityCap && this.relevance && DENSITY_CAPPED.has(L.def.id) && meta.length > this.densityCap) {
+      const scored = meta.map((m, i) => [this.relevance(m, L.def.id), i]);
+      scored.sort((a, b) => b[0] - a[0]);
+      const keepPos = new Float32Array(this.densityCap * 3);
+      const keepMeta = new Array(this.densityCap);
+      for (let k = 0; k < this.densityCap; k++) {
+        const i = scored[k][1];
+        keepPos.set(pos.subarray(i * 3, i * 3 + 3), k * 3);
+        keepMeta[k] = meta[i];
+      }
+      pos = keepPos;
+      meta = keepMeta;
     }
     L.points.geometry.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     L.points.geometry.attributes.position.needsUpdate = true;
