@@ -1,4 +1,5 @@
 import { CONFIG } from '../config.js';
+import { acCategory } from '../contactFilters.js';
 
 // Aircraft from OpenSky (via backend proxy) or a local ADS-B receiver.
 // Region-aware: narrows to a bounding box when a region is focused. Handles
@@ -41,6 +42,9 @@ export default {
             heading: a.track ?? null,
             altFt: a.alt_baro ?? a.alt_geom ?? null, // fast fields for filters
             ktGs: a.gs ?? null,
+            squawk: a.squawk || null,
+            vr: a.baro_rate ?? a.geom_rate ?? null, // ft/min
+            cat: acCategory(a.category),
             callsign: (a.flight || '').trim(),
             headline: (a.flight || '').trim() || a.hex,
             rows: {
@@ -68,9 +72,10 @@ export default {
 
     try {
       const bb = ctx.region()?.bbox;
+      // extended=true adds the aircraft-category enum (element 17) to each state.
       const url = bb
-        ? `${CONFIG.AIR.url}?lamin=${bb[0]}&lomin=${bb[1]}&lamax=${bb[2]}&lomax=${bb[3]}`
-        : CONFIG.AIR.url;
+        ? `${CONFIG.AIR.url}?extended=true&lamin=${bb[0]}&lomin=${bb[1]}&lamax=${bb[2]}&lomax=${bb[3]}`
+        : CONFIG.AIR.url + '?extended=true';
       const res = await fetch(url);
       if (res.status === 429) {
         const wait = res.headers.get('X-Rate-Limit-Retry-After-Seconds');
@@ -102,6 +107,9 @@ export default {
           heading: s[10] ?? null, // true_track
           altFt: alt * 3280.84,   // fast fields for filters
           ktGs: s[9] != null ? s[9] * 1.944 : null,
+          squawk: s[14] || null,
+          vr: s[11] != null ? s[11] * 196.85 : null, // m/s → ft/min
+          cat: acCategory(s[17]),
           callsign: (s[1] || '').trim(),
           headline: (s[1] || '').trim() || s[0].toUpperCase(),
           rows: {

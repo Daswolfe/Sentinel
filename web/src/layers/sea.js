@@ -57,6 +57,7 @@ function darkMeta(v) {
     heading: v.cog ?? v.heading ?? null,
     sog: v.sog ?? null,
     shipType: v.type ?? null,
+    darkAt: v.darkAt ?? null, // fast field for the dark-duration filter
     headline: `⚠ DARK — ${v.name || 'MMSI ' + v.mmsi}`,
     get rows() {
       return (this._r ??= {

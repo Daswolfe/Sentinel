@@ -1446,9 +1446,17 @@ function applyContactFilters() {
   FILTER.movingOnly = document.getElementById('fMove').checked;
   FILTER.altBand = document.getElementById('fAlt').value;
   FILTER.orbitBand = document.getElementById('fOrbit').value;
+  FILTER.shipClass = document.getElementById('fShip').value;
+  FILTER.darkH = +document.getElementById('fDark').value;
+  FILTER.emergOnly = document.getElementById('fEmerg').checked;
+  FILTER.acCat = document.getElementById('fCat').value;
+  FILTER.stage = document.getElementById('fStage').value;
+  FILTER.constellation = document.getElementById('fConst').value;
+  FILTER.fastOnly = document.getElementById('fFast').checked;
   ctx.refilterAll();
 }
-for (const id of ['fNat', 'fMil', 'fWatch', 'fMove', 'fAlt', 'fOrbit'])
+for (const id of ['fNat', 'fMil', 'fWatch', 'fMove', 'fAlt', 'fOrbit',
+                  'fShip', 'fDark', 'fEmerg', 'fCat', 'fStage', 'fConst', 'fFast'])
   document.getElementById(id).addEventListener('change', applyContactFilters);
 
 // Contact search: Enter finds the first vessel/aircraft/airport/satellite

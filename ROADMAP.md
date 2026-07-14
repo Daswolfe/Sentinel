@@ -257,8 +257,12 @@ the "S" in OSINT. **All items shipped:**
   isolated repro. Shelved behind `CONFIG.BUILDINGS.provider = 'osm'` (flip to
   `'google'` to resume); OSM extrusions remain the active provider and were
   re-verified at deep zoom.
-- ⬜ Remaining: filter polish (#14); resume #13 when the render-pass conflict
-  is understood.
+- ✅ **Filter polish** (#14) — DONE 2026-07-14: the §7 filter backlog shipped
+  (vessel class, aircraft category, emergency-only, fast-mover, dark-duration,
+  constellation, route stage) as two new sidebar filter rows. Only the density
+  cap remains (deferred — needs cross-layer relevance scoring).
+- **Theme 3 complete** except the shelved #13 (Google 3D Tiles render-pass
+  conflict).
 
 10. ✅ **Nation highlight walls** — **click a nation's name → highlight it with a
     translucent extruded wall along its borders** (reuse the Natural Earth border
@@ -314,15 +318,16 @@ the "S" in OSINT. **All items shipped:**
 
 ## 7. Backlog — filters & nice-to-haves
 
-- **Vessel class** — AIS ship-type groups (tanker 80s / cargo 70s / passenger /
-  fishing / tug / military 35); data on `meta.shipType`.
-- **Aircraft category** — readsb `category` (light…heavy, glider, rotorcraft).
-- **Emergency only** — squawk 7500/7600/7700 across AIR + MILAIR.
-- **Speed band** — fast-mover cut (>600 kt) for intercept watching.
+*Shipped 2026-07-14 (Theme 3.14):* ✅ vessel class (tanker/cargo/pax/fishing/
+tug/military; selecting a class hides unknown-type targets), ✅ aircraft
+category (light/large/heavy/hi-perf/rotor — adsb.lol `category` + OpenSky
+`extended=true` enum; unknown passes), ✅ emergency-only (7500/7600/7700),
+✅ fast-mover cut (>600 kt, unknown speed hidden), ✅ dark-duration (>1/3/6/12 h),
+✅ constellation (Starlink/OneWeb/Iridium/GPS/GLONASS/Galileo/BeiDou by TLE
+name), ✅ route stage (climb/cruise/descent, ±300 ft/min).
+
 - **Density cap** — "top N by relevance in view" instead of hard toggles.
-- **Dark-duration** — only ships silent > N hours.
-- **Constellation** — satellite owner grouping (Starlink / GLONASS / GPS / mil).
-- **Route stage** — climb/cruise/descent via vertical-rate sign.
+  (Deferred: needs a relevance score across layers.)
 
 ---
 

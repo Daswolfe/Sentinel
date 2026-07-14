@@ -46,6 +46,27 @@
       <option value="all">ORBIT: ALL</option><option value="leo">LEO</option><option value="meo">MEO</option><option value="geo">GEO</option>
     </select>
   </div>
+  <div class="filters" id="contactFilters3">
+    <select id="fShip" title="Vessel class (AIS ship type) — selecting a class hides unknown-type targets">
+      <option value="all">SHIP: ALL</option><option value="tanker">TANKER</option><option value="cargo">CARGO</option><option value="pax">PASSENGER</option><option value="fishing">FISHING</option><option value="tug">TUG</option><option value="military">MILITARY</option>
+    </select>
+    <select id="fDark" title="Only ships dark (silent) longer than this">
+      <option value="0">DARK: ANY</option><option value="1">&gt;1 h</option><option value="3">&gt;3 h</option><option value="6">&gt;6 h</option><option value="12">&gt;12 h</option>
+    </select>
+    <label title="Only 7500/7600/7700 emergency squawks (AIR + MIL AIR)"><input type="checkbox" id="fEmerg"> EMERG</label>
+  </div>
+  <div class="filters" id="contactFilters4">
+    <select id="fCat" title="Aircraft size/wake category (unknown category still shows)">
+      <option value="all">CAT: ALL</option><option value="light">LIGHT</option><option value="large">LARGE</option><option value="heavy">HEAVY</option><option value="fast">HI-PERF</option><option value="rotor">ROTOR</option>
+    </select>
+    <select id="fStage" title="Flight stage from vertical rate (±300 ft/min)">
+      <option value="all">STAGE: ALL</option><option value="climb">CLIMB</option><option value="cruise">CRUISE</option><option value="descent">DESCENT</option>
+    </select>
+    <select id="fConst" title="Satellite constellation / owner group">
+      <option value="all">SAT: ALL</option><option value="starlink">STARLINK</option><option value="oneweb">ONEWEB</option><option value="iridium">IRIDIUM</option><option value="gps">GPS</option><option value="glonass">GLONASS</option><option value="galileo">GALILEO</option><option value="beidou">BEIDOU</option>
+    </select>
+    <label title="Only fast movers >600 kt ground speed (intercept watching); unknown speed hidden"><input type="checkbox" id="fFast"> &gt;600KT</label>
+  </div>
   <div class="legend">
     <span><b class="ok">LIVE</b> real data</span>
     <span><b class="sim">SIM</b> simulated</span>

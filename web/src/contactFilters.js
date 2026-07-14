@@ -127,6 +127,33 @@ function isNotable(m, watchlist) {
 
 const WL_KEY = 'sentinel.watchlist';
 
+// AIS ship-type code → coarse vessel class (first digit + special codes).
+export function shipClass(t) {
+  const n = +t;
+  if (!isFinite(n) || n <= 0) return null;
+  if (n === 30) return 'fishing';
+  if (n === 35) return 'military';
+  if (n === 31 || n === 32 || n === 52) return 'tug';
+  const d = Math.floor(n / 10);
+  if (d === 6) return 'pax';
+  if (d === 7) return 'cargo';
+  if (d === 8) return 'tanker';
+  return 'other';
+}
+
+// Aircraft wake/size category → coarse class token. Accepts both encodings:
+// readsb-style strings ("A3") from adsb.lol and OpenSky's numeric enum
+// (extended=true adds it to /states/all as element 17).
+export function acCategory(v) {
+  if (v == null || v === '') return null;
+  const byCode = {
+    A1: 'light', A2: 'light', A3: 'large', A4: 'large', A5: 'heavy',
+    A6: 'fast', A7: 'rotor', B1: 'glider',
+  }[String(v).toUpperCase()];
+  if (byCode) return byCode;
+  return { 2: 'light', 3: 'light', 4: 'large', 5: 'large', 6: 'heavy', 7: 'fast', 8: 'rotor', 9: 'glider' }[+v] ?? null;
+}
+
 // The active filter state, mutated by the UI.
 export const FILTER = {
   nat: '',
@@ -135,6 +162,13 @@ export const FILTER = {
   movingOnly: false, // hide anchored vessels / near-stationary targets
   altBand: 'all',    // aircraft: all | lo (<10k ft) | mid (10–30k) | hi (>30k)
   orbitBand: 'all',  // satellites: all | leo | meo | geo
+  shipClass: 'all',  // vessels: all | tanker | cargo | pax | fishing | tug | military
+  acCat: 'all',      // aircraft: all | light | large | heavy | fast | rotor
+  emergOnly: false,  // aircraft: only 7500/7600/7700 squawks
+  fastOnly: false,   // aircraft: only fast movers (>600 kt ground speed)
+  stage: 'all',      // aircraft: all | climb | cruise | descent (vertical-rate sign)
+  darkH: 0,          // dark ships: only silent longer than this many hours
+  constellation: 'all', // satellites: all | starlink | oneweb | iridium | gps | glonass | galileo | beidou
   watchlist: loadWatchlist(),
 };
 
@@ -176,10 +210,25 @@ export function watchlistTerm(m) {
 const AIRBORNE = new Set(['AIR', 'MILAIR']);
 const CONTACT_LAYERS = new Set(['AIR', 'MILAIR', 'SEA', 'DARK']);
 
+// Satellite constellation from the catalog name (CelesTrak TLE names).
+const CONSTELLATIONS = {
+  starlink: /^STARLINK/,
+  oneweb: /^ONEWEB/,
+  iridium: /^IRIDIUM/,
+  gps: /NAVSTAR|^GPS/,
+  glonass: /GLONASS/,
+  galileo: /GALILEO|^GSAT/,
+  beidou: /BEIDOU/,
+};
+
 // Predicate handed to the LayerContext; true = keep the contact visible.
 export function contactPasses(m, layerId) {
-  // Satellites only respond to the orbit-band cut.
+  // Satellites respond to the orbit-band + constellation cuts.
   if (layerId === 'SAT') {
+    if (FILTER.constellation !== 'all') {
+      const re = CONSTELLATIONS[FILTER.constellation];
+      if (re && !re.test((m.headline || '').toUpperCase())) return false;
+    }
     if (FILTER.orbitBand === 'all') return true;
     const a = m.altKm ?? 0;
     if (FILTER.orbitBand === 'leo') return a < 2000;
@@ -208,6 +257,30 @@ export function contactPasses(m, layerId) {
       if (FILTER.altBand === 'lo' && ft >= 10000) return false;
       if (FILTER.altBand === 'mid' && (ft < 10000 || ft > 30000)) return false;
       if (FILTER.altBand === 'hi' && ft <= 30000) return false;
+    }
+  }
+  // Vessel class (tanker/cargo/…): a selected class DROPS unknown-type targets
+  // — the point of the cut is to see only that class, and ~a third of AIS
+  // targets never broadcast a type.
+  if (FILTER.shipClass !== 'all' && (layerId === 'SEA' || layerId === 'DARK')) {
+    if (shipClass(m.shipType) !== FILTER.shipClass) return false;
+  }
+  // Dark-duration: only ships silent longer than N hours.
+  if (FILTER.darkH > 0 && layerId === 'DARK') {
+    if (!(m.darkAt != null && Date.now() - m.darkAt > FILTER.darkH * 3600e3)) return false;
+  }
+  if (AIRBORNE.has(layerId)) {
+    if (FILTER.emergOnly && !['7500', '7600', '7700'].includes(m.squawk)) return false;
+    // Fast-mover cut (intercept watching): unknown speed is dropped — the cut
+    // exists to declutter down to confirmed fast movers.
+    if (FILTER.fastOnly && !((m.ktGs ?? 0) > 600)) return false;
+    if (FILTER.stage !== 'all' && m.vr != null) {
+      const s = m.vr > 300 ? 'climb' : m.vr < -300 ? 'descent' : 'cruise';
+      if (s !== FILTER.stage) return false;
+    }
+    if (FILTER.acCat !== 'all') {
+      const c = m.cat ?? null;
+      if (c != null && c !== FILTER.acCat) return false; // unknown category passes
     }
   }
   if (FILTER.watchOnly && !isNotable(m, FILTER.watchlist)) return false;

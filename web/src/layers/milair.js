@@ -1,4 +1,5 @@
 import { CONFIG } from '../config.js';
+import { acCategory } from '../contactFilters.js';
 
 // Military aircraft from adsb.lol's /v2/mil feed (via the backend proxy — the
 // API is CORS-blocked in-browser). Global, keyless, ~250 aircraft. Same readsb
@@ -41,6 +42,9 @@ export default {
           heading: a.track ?? a.mag_heading ?? null,
           altFt: typeof a.alt_baro === 'number' ? a.alt_baro : null,
           ktGs: a.gs ?? null,
+          squawk: a.squawk || null,
+          vr: a.baro_rate ?? a.geom_rate ?? null, // ft/min
+          cat: acCategory(a.category),
           callsign: cs,
           headline: cs || (a.r || a.hex || 'MIL').toString().toUpperCase(),
           rows: {
