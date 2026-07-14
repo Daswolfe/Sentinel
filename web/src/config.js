@@ -113,6 +113,11 @@ const CONFIG = {
     grid: 3,          // GRID×GRID z15 tiles around the camera ground point
     maxPerTile: 2500, // safety cap on extruded footprints per tile
   },
+  BOUNDARIES: { // Maritime boundaries — Marine Regions v12 (CC-BY), preprocessed
+    // into a compact polyline index by server/data/convert-maritime.mjs and
+    // served static by the backend. EEZ + disputed lines, 12/24 nm zone rings.
+    url: "/api/maritime",
+  },
   BORDERS: {    // Natural Earth 50m admin-0 — full-res coastline + borders + names
     url: "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson",
   },

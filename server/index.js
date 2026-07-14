@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { readFile } from 'node:fs/promises';
 import { WebSocketServer } from 'ws';
 import { CONFIG } from './config.js';
 import { AisRelay } from './ais.js';
@@ -10,6 +11,7 @@ import { getBikeshare } from './bikeshare.js';
 
 const relay = new AisRelay();
 let outagesCache = { t: 0, data: null }; // Cloudflare Radar outages (15-min cache)
+let maritimeCache = null; // preprocessed maritime-boundary index (static)
 let aisStatus = relay.enabled ? 'connecting' : 'disabled';
 relay.on('status', (s) => (aisStatus = s));
 
@@ -121,6 +123,21 @@ const server = http.createServer(async (req, res) => {
   // GPS interference — gpsjam.org daily H3 CSV, decoded, thresholded and
   // clustered into denied zones here (the browser would need an H3 library
   // and a CORS exception otherwise). ?minPct= & ?minAircraft= tune the cut.
+  // Maritime boundaries — preprocessed Marine Regions index (EEZ delimitation
+  // lines incl. disputed, 12 nm territorial-sea + 24 nm contiguous-zone rings).
+  // Static after preprocessing; built by server/data/convert-maritime.mjs.
+  if (url.pathname === '/maritime') {
+    try {
+      if (!maritimeCache)
+        maritimeCache = await readFile(new URL('./data/maritime.json', import.meta.url));
+      cors(res);
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=86400' });
+      return res.end(maritimeCache);
+    } catch {
+      return json(res, 404, { error: 'maritime index missing — run server/data/convert-maritime.mjs' });
+    }
+  }
+
   if (url.pathname === '/gpsjam') {
     try {
       const minPct = Math.max(2, Number(url.searchParams.get('minPct')) || 10);

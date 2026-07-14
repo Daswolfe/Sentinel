@@ -31,6 +31,7 @@ import thermal from './layers/thermal.js';
 import jamming from './layers/jamming.js';
 import airports from './layers/airports.js';
 import cities from './layers/cities.js';
+import boundaries from './layers/boundaries.js';
 import bikeshare from './layers/bikeshare.js';
 import webcams from './layers/webcams.js';
 import outages from './layers/outages.js';
@@ -414,6 +415,7 @@ registry.addAll([
   jamming,
   airports,
   cities,
+  boundaries,
   bikeshare,
   webcams,
   outages,

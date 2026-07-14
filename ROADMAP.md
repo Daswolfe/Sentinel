@@ -241,16 +241,21 @@ the "S" in OSINT. **All items shipped:**
   multiple nations at once, persisted in localStorage and rebuilt on load.
   Click the name again to clear. Walls use ≤800-pt rings (render-only), kept
   separate from the ≤250-pt tripwire rings that go to localStorage.
-- ⬜ Remaining: maritime/airspace boundaries (#11),
-  Google 3D Tiles (#13, key now in `.env` as `GOOGLE_MAPS_KEY`), filter polish (#14).
+- ✅ **Maritime boundaries** (#11 below) — DONE 2026-07-13 (maritime half):
+  "Sea Boundaries" layer — EEZ / disputed / 24 nm / 12 nm from Marine Regions v12.
+- ⬜ Remaining: Google 3D Tiles (#13, key now in `.env` as `GOOGLE_MAPS_KEY`),
+  filter polish (#14).
 
 10. ✅ **Nation highlight walls** — **click a nation's name → highlight it with a
     translucent extruded wall along its borders** (reuse the Natural Earth border
     polygons already loaded for labels).
-11. **Maritime & airspace boundaries** — demarcation lines for **territorial
-    seas (12 nm), contiguous zone, and EEZ (200 nm)** (Natural Earth / Marine
-    Regions data), plus national airspace polygons. Shared geometry powers the
-    airspace tracking box (Theme 1.3).
+11. ✅ **Maritime & airspace boundaries** — DONE (maritime): Marine Regions v12
+    preprocessed by `server/data/convert-maritime.mjs` (~250 MB WFS → 1.9 MB
+    `maritime.json`), served at `/api/maritime`, drawn by `layers/boundaries.js`
+    ("Sea Boundaries", lazy/default-off): EEZ delimitation blue, **disputed/
+    unsettled red**, 24 nm violet, 12 nm teal — one LineSegments per class.
+    National airspace polygons are covered by nation walls + airspace tripwires
+    (shared Natural Earth rings); FIR boundaries stay in the backlog.
 12. **GPS-jamming shape fidelity** — the affected area currently renders as a
     **bounding circle**; replace it with a **polygon / concave hull (or per-H3-cell
     footprint)** that traces the actual affected cells, so the shape depicts the
