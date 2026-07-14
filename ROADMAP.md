@@ -300,7 +300,8 @@ the "S" in OSINT. **All items shipped:**
     concurrent websockets per IP (default 4, `WS_MAX_PER_IP`); `TRUST_PROXY=1`
     reads X-Forwarded-For behind a reverse proxy. Verified: burst of 310 →
     exactly 300×200 + 10×429.
-19. **Tauri desktop app** — ~10 MB native shell, Node backend as sidecar.
+19. ⏸ **Tauri desktop app** — BLOCKED: no Rust toolchain on the dev box
+    (checked 2026-07-14). Install rustup, then revisit.
 20. ✅ **Recorded-scenario replay** — DONE 2026-07-14. Message-level NDJSON
     capture instead of the SQLite fixes (those are 5-min breadcrumbs with no
     name/sog/type — too lossy to drive the dark-ship engine): `AIS_RECORD=`
@@ -396,7 +397,11 @@ name), ✅ route stage (climb/cruise/descent, ±300 ft/min).
   STS detection; cross-layer correlation; SQLite persistence; backend auth.
 
 ## 9 User Feature Request
-1. When a ship goes dark display a ring with a secondary ring that pulses from the center to the outside then repeats signifying its last known location
+1. ✅ **DONE 2026-07-14** — dark-ship pulse beacons (`web/src/darkpulse.js`):
+   every DARK contact renders a fixed ring at its last known position plus a
+   sonar-style pulse ring swelling centre→perimeter on a 2.6 s cycle, phase-
+   staggered per MMSI, altitude-scaled, tinted by the DARK layer colour, two
+   draw calls total (instanced).
 
 some suggestions for optimization down the road. take with a grain of salt, it is from copilot.
 

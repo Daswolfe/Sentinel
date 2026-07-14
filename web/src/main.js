@@ -8,6 +8,7 @@ import { RadarOverlay } from './radar.js';
 import { BuildingsOverlay } from './buildings.js';
 import { Tripwires } from './tripwires.js';
 import { NationWalls } from './nationwalls.js';
+import { DarkPulse } from './darkpulse.js';
 import { OrbitWatch } from './orbitwatch.js';
 import { Dossiers } from './dossiers.js';
 import { runwayDiagram } from './runways.js';
@@ -193,6 +194,7 @@ const nationPolys = new Map(); // NAME -> [ outerRing[[lat,lon]], … ] (decimat
 // so they can afford more vertices than the localStorage-bound tripwire rings).
 const nationWallRings = new Map();
 const nationWalls = new NationWalls(scene);
+const darkPulse = new DarkPulse(scene); // §9.1 — last-known-location beacons
 scene.add(nationLbls);
 fetch(CONFIG.BORDERS.url)
   .then((r) => r.json())
@@ -2010,6 +2012,9 @@ let lastArrowRescale = 0;
     ctx.rescaleArrows();
     lastArrowRescale = now;
   }
+  // Dark-ship beacons pulse every frame (they animate); ring size tracks the
+  // marker scale so the sonar ring stays readable through a zoom.
+  darkPulse.update(ctx.layers.get('DARK'), ctx.markerScale * 2.4);
   nationLbls.visible = nationNamesOn && alt > 8;
   if (nationLbls.visible) {
     const s = Math.max(0.45, Math.min(2.2, alt / 220));
