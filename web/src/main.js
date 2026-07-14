@@ -7,6 +7,7 @@ import { TileOverlay } from './tiles.js';
 import { RadarOverlay } from './radar.js';
 import { BuildingsOverlay } from './buildings.js';
 import { Tripwires } from './tripwires.js';
+import { NationWalls } from './nationwalls.js';
 import { OrbitWatch } from './orbitwatch.js';
 import { Dossiers } from './dossiers.js';
 import { runwayDiagram } from './runways.js';
@@ -185,6 +186,10 @@ const gratGrp = (function () {
 let coastGrp = null;
 const nationLbls = new THREE.Group();
 const nationPolys = new Map(); // NAME -> [ outerRing[[lat,lon]], … ] (decimated) — for airspace tripwires
+// Higher-fidelity rings for the highlight walls (render-only, never persisted,
+// so they can afford more vertices than the localStorage-bound tripwire rings).
+const nationWallRings = new Map();
+const nationWalls = new NationWalls(scene);
 scene.add(nationLbls);
 fetch(CONFIG.BORDERS.url)
   .then((r) => r.json())
@@ -208,7 +213,9 @@ fetch(CONFIG.BORDERS.url)
         sp.position.copy(llToV(ly, lx, R + 0.4));
         // LABELRANK (1 = major power … 9 = microstate) drives decluttering:
         // zoomed out only the big names show; Europe fills in as you approach.
-        sp.userData = { rank: p.LABELRANK ?? p.labelrank ?? 5, base: sp.scale.clone() };
+        // `name` makes the label clickable — pick() toggles that nation's
+        // highlight wall (Theme 3.10).
+        sp.userData = { rank: p.LABELRANK ?? p.labelrank ?? 5, base: sp.scale.clone(), name };
         nationLbls.add(sp);
         // ISO2 → label point, reused by the Net Outages layer to place outages.
         const iso = p.ISO_A2_EH || p.ISO_A2 || p.iso_a2;
@@ -217,21 +224,33 @@ fetch(CONFIG.BORDERS.url)
       // Collect this nation's outer rings (decimated, [lat,lon]) for airspace
       // tripwires — holes/enclaves ignored, which is fine for a crossing count.
       if (name) {
-        const rings = [];
+        const rings = [];   // ≤250 pt/ring — persisted with airspace tripwires
+        const hd = [];      // ≤800 pt/ring — render-only nation highlight walls
         for (const poly of polys) {
           const outer = poly[0];
           if (!outer || outer.length < 4) continue;
-          const stride = Math.max(1, Math.ceil(outer.length / 250));
-          const r = [];
-          for (let i = 0; i < outer.length; i += stride) r.push([outer[i][1], outer[i][0]]);
-          if (r.length >= 3) rings.push(r);
+          const dec = (cap) => {
+            const stride = Math.max(1, Math.ceil(outer.length / cap));
+            const r = [];
+            for (let i = 0; i < outer.length; i += stride) r.push([outer[i][1], outer[i][0]]);
+            return r;
+          };
+          const r = dec(250);
+          if (r.length >= 3) {
+            rings.push(r);
+            hd.push(dec(800));
+          }
         }
-        if (rings.length) nationPolys.set(name, rings);
+        if (rings.length) {
+          nationPolys.set(name, rings);
+          nationWallRings.set(name, hd);
+        }
       }
     }
     scene.add(grp);
     coastGrp = grp;
     populateNationPicker();
+    nationWalls.setResolver((n) => nationWallRings.get(n)); // re-raises persisted walls
     ui.info(`Cartography — ${gj.features.length} countries, full-res borders + names`);
   })
   .catch(() => ui.tick('Border basemap unavailable — wireframe mode'));
@@ -1015,6 +1034,18 @@ function pick(e) {
   }
   const hit = raycastPoints(e);
   if (hit) return onPick(hit.m);
+  // Nation-name labels: click a name → toggle its translucent border wall
+  // (Theme 3.10). Raycaster must skip rank-hidden sprites explicitly — THREE
+  // tests invisible objects too. `ray` is still set from raycastPoints.
+  if (nationLbls.visible) {
+    const lblHits = ray.intersectObjects(nationLbls.children.filter((s) => s.visible));
+    const name = lblHits[0]?.object.userData.name;
+    if (name) {
+      if (nationWalls.toggle(name)) ui.tick(`Nation highlight — ${name} (click name again to clear)`);
+      else ui.tick(`Nation highlight cleared — ${name}`);
+      return;
+    }
+  }
   const sphereHit = ray.intersectObject(globeMesh); // ray still set from raycastPoints
   if (sphereHit.length) {
     const p = sphereHit[0].point.clone().normalize();
@@ -1862,7 +1893,7 @@ makePanels(); // panels: drag title to move, click title to collapse (persisted)
 // Dev/debug handle — inspect scene + layers from the console.
 // Dev handle (guarded): expose internals only when ?debug is in the URL.
 if (location.search.includes('debug')) {
-  window.__argus = { scene, camera, ctx, registry, tripwires, orbitWatch, dossiers,
+  window.__argus = { scene, camera, ctx, registry, tripwires, orbitWatch, dossiers, nationWalls,
     get pivot() { return pivot; }, get camMode() { return camMode; } };
 }
 Alerts.armNotify();

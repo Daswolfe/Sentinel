@@ -235,10 +235,16 @@ the "S" in OSINT. **All items shipped:**
 - ✅ **GPS-jamming shape fidelity** (#12 below) — DONE: `server/gpsjam.js` now
   returns a padded convex **hull** of each cluster's H3 cells; `layers/jamming.js`
   draws the hull polygon instead of a bounding circle.
-- ⬜ Remaining: nation highlight walls (#10), maritime/airspace boundaries (#11),
+- ✅ **Nation highlight walls** (#10 below) — DONE: `web/src/nationwalls.js`;
+  click a nation's name label → translucent extruded border wall (fades with
+  height) + bright base line, one merged mesh per nation, palette-coloured,
+  multiple nations at once, persisted in localStorage and rebuilt on load.
+  Click the name again to clear. Walls use ≤800-pt rings (render-only), kept
+  separate from the ≤250-pt tripwire rings that go to localStorage.
+- ⬜ Remaining: maritime/airspace boundaries (#11),
   Google 3D Tiles (#13, key now in `.env` as `GOOGLE_MAPS_KEY`), filter polish (#14).
 
-10. **Nation highlight walls** — **click a nation's name → highlight it with a
+10. ✅ **Nation highlight walls** — **click a nation's name → highlight it with a
     translucent extruded wall along its borders** (reuse the Natural Earth border
     polygons already loaded for labels).
 11. **Maritime & airspace boundaries** — demarcation lines for **territorial
@@ -268,9 +274,7 @@ the "S" in OSINT. **All items shipped:**
     demos and for contributors without live keys.
 
 ### Recommended next 3 moves *(Theme 3)*
-1. **Nation highlight walls** (Theme 3.10) — click a nation → translucent border
-   wall. Reuses the Natural Earth polygons already loaded (`ctx.nationCentroid`
-   exists; the airspace-tripwire code already extracts per-nation rings).
+1. ✅ ~~**Nation highlight walls** (Theme 3.10)~~ — shipped 2026-07-13.
 2. **Maritime & airspace boundaries** (Theme 3.11) — 12 nm / EEZ demarcation from
    Natural Earth / Marine Regions; shared geometry with airspace tripwires.
 3. **Google Photorealistic 3D Tiles** (Theme 3.13) — key is provisioned
@@ -307,6 +311,11 @@ the "S" in OSINT. **All items shipped:**
 
 ## 8. Changelog (high level)
 
+- **2026-07-13 (later)** — **Nation highlight walls** (Theme 3.10): click a
+  nation's name label → translucent extruded border wall (`nationwalls.js`),
+  palette-coloured, multi-nation, persisted; click again to clear. Live-verified
+  (Chile/Saudi Arabia/Mongolia raised by clicking, Russia cleared, walls survive
+  reload); 17/17 tests green.
 - **2026-07-13** — **Theme 1 complete** (tracking boxes + airspace tripwires,
   surveillance-orbit detector, per-nation dossier builder w/ LLM briefs,
   pattern-of-life SQLite queries, watchlist v2, correlation→SITREP). **Theme 2
