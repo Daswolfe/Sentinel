@@ -372,6 +372,17 @@ name), ✅ route stage (climb/cruise/descent, ±300 ft/min).
 
 ## 8. Changelog (high level)
 
+- **2026-07-15 (QoL wave)** — **Two-level imagery pyramid** (`tiles.js`): a
+  coarse skirt (zoom−3, 8× width) under the fine 5×5 patch kills the black
+  screen edges in tilted/panning deep-zoom views (verified: all four screen
+  corners land on imagery); coarse re-fetches 8× less often, so pans show
+  low-res ground while the fine patch catches up. **Day/night terminator**
+  (`terminator.js`, ☾ NIGHT toggle, persisted): night-hemisphere shading +
+  subsolar ☀, low-precision solar ephemeris, auto-hidden at deep zoom.
+  **Measure tool** (`measure.js`, ⤢ MEASURE): click two points → great-circle
+  arc + distance (units-panel aware) + initial bearing; swallows clicks so
+  picking doesn't fire while armed. **Alert sound** — 🔔 toggle in the alerts
+  panel (WebAudio two-tone ping, off by default, persisted).
 - **2026-07-14 (optimization pass)** — Copilot notes triaged (§10): persistent
   point + trail GPU buffers w/ drawRange (no more per-plot Float32Array churn),
   fixed conservative bounding spheres (raycast never recomputes), region filter

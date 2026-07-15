@@ -19,6 +19,8 @@
   <button id="imgBtn" title="Cycle basemap: dark → HD Blue Marble (8K static) → LIVE daily MODIS">🛰 IMAGERY: OFF</button>
   <button id="radarBtn" title="Global precipitation radar (RainViewer — fuses NOAA NEXRAD + worldwide radar), animated">⛆ RADAR</button>
   <button id="bldgBtn" class="on" title="3D buildings at deep zoom (OSM Buildings extrusions — zoom below ~30 km over a city)">⌂ 3D</button>
+  <button id="termBtn" title="Day/night terminator shading + subsolar point">☾ NIGHT</button>
+  <button id="measBtn" title="Measure: click two points on the globe → great-circle distance + bearing. Third click starts a new measurement.">⤢ MEASURE</button>
   <button id="unitsBtn" title="Display units — altitude, speed, distance, temperature, coordinates">⚙︎ UNITS</button>
   <div id="unitsPop" style="display:none">
     <div class="up-row"><span>ALTITUDE</span><select id="uAlt"><option value="ft">feet</option><option value="m">metres</option><option value="fl">flight level</option></select></div>
@@ -145,7 +147,7 @@
 </div>
 
 <div class="panel" id="alerts">
-  <h2>ALERTS · <span id="alertCount">0</span><span id="ackAll" title="Acknowledge all alerts">✓ ALL</span></h2>
+  <h2>ALERTS · <span id="alertCount">0</span><span id="alertBell" title="Audible ping on new alerts">🔕</span><span id="ackAll" title="Acknowledge all alerts">✓ ALL</span></h2>
   <div class="body" id="alertList"></div>
 </div>
 

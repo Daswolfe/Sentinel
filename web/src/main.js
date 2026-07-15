@@ -8,6 +8,8 @@ import { RadarOverlay } from './radar.js';
 import { BuildingsOverlay } from './buildings.js';
 import { Tripwires } from './tripwires.js';
 import { NationWalls } from './nationwalls.js';
+import { Terminator } from './terminator.js';
+import { MeasureTool } from './measure.js';
 import { DarkPulse } from './darkpulse.js';
 import { OrbitWatch } from './orbitwatch.js';
 import { Dossiers } from './dossiers.js';
@@ -195,6 +197,8 @@ const nationPolys = new Map(); // NAME -> [ outerRing[[lat,lon]], … ] (decimat
 const nationWallRings = new Map();
 const nationWalls = new NationWalls(scene);
 const darkPulse = new DarkPulse(scene); // §9.1 — last-known-location beacons
+const terminator = new Terminator(scene); // day/night shading (☾ NIGHT)
+const measure = new MeasureTool(scene, canvas, camera); // great-circle tape (⤢ MEASURE)
 scene.add(nationLbls);
 fetch(CONFIG.BORDERS.url)
   .then((r) => r.json())
@@ -547,6 +551,14 @@ const ui = {
       }
     });
     document.getElementById('ackAll').addEventListener('click', () => Alerts.ackAll());
+    const bell = document.getElementById('alertBell');
+    bell.textContent = Alerts.soundOn ? '🔔' : '🔕';
+    bell.addEventListener('click', () => {
+      Alerts.soundOn = !Alerts.soundOn;
+      localStorage.setItem('sentinel.alertSound', Alerts.soundOn ? '1' : '0');
+      bell.textContent = Alerts.soundOn ? '🔔' : '🔕';
+      if (Alerts.soundOn) Alerts._ping(); // audible confirmation
+    });
     this.renderAlerts();
   },
   count(id, n) {
@@ -1433,6 +1445,21 @@ function makePanels() {
   }
 }
 
+/* ═══════════════ TERMINATOR + MEASURE TOGGLES ═════════════════ */
+const termBtn = document.getElementById('termBtn');
+termBtn.classList.toggle('on', terminator.enabled);
+termBtn.addEventListener('click', () => {
+  terminator.setEnabled(!terminator.enabled);
+  termBtn.classList.toggle('on', terminator.enabled);
+});
+const measBtn = document.getElementById('measBtn');
+measBtn.addEventListener('click', () => measure.setArmed(!measure.armed));
+measure.onChange((armed) => {
+  measBtn.classList.toggle('on', armed);
+  canvas.style.cursor = armed ? 'crosshair' : '';
+  if (armed) ui.tick('Measure — click two points on the globe; third click restarts');
+});
+
 /* ═══════════════ CARTOGRAPHY TOGGLES ══════════════════════════ */
 let nationNamesOn = true;
 document.getElementById('lblNations').addEventListener('change', (e) => {
@@ -1720,10 +1747,32 @@ const Alerts = {
       } catch (_) {}
     }
   },
+  // Audible ping (two quick tones, WebAudio — no asset). Off by default;
+  // toggled by the 🔔 in the alerts panel header, persisted.
+  soundOn: localStorage.getItem('sentinel.alertSound') === '1',
+  _ping() {
+    if (!this.soundOn) return;
+    try {
+      const ac = (this._ac ??= new AudioContext());
+      for (const [f, t0] of [[880, 0], [1320, 0.09]]) {
+        const o = ac.createOscillator();
+        const g = ac.createGain();
+        o.frequency.value = f;
+        o.type = 'sine';
+        g.gain.setValueAtTime(0.0001, ac.currentTime + t0);
+        g.gain.exponentialRampToValueAtTime(0.12, ac.currentTime + t0 + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + t0 + 0.22);
+        o.connect(g).connect(ac.destination);
+        o.start(ac.currentTime + t0);
+        o.stop(ac.currentTime + t0 + 0.25);
+      }
+    } catch (_) {}
+  },
   fire(title, msg, lat, lon, ref) {
     const key = title + '|' + msg;
     if (this.seen.has(key)) return;
     this.seen.add(key);
+    this._ping();
     // `ref` ({icao} or {mmsi}) lets a click re-resolve to the contact's live
     // position instead of where the alert was born.
     const rec = { title, msg, lat, lon, ref, t: Date.now() };
@@ -1938,7 +1987,7 @@ makePanels(); // panels: drag title to move, click title to collapse (persisted)
 // Dev/debug handle — inspect scene + layers from the console.
 // Dev handle (guarded): expose internals only when ?debug is in the URL.
 if (location.search.includes('debug')) {
-  window.__argus = { scene, camera, ctx, registry, tripwires, orbitWatch, dossiers, nationWalls, buildings,
+  window.__argus = { scene, camera, ctx, registry, tripwires, orbitWatch, dossiers, nationWalls, buildings, tiles, measure, terminator,
     get pivot() { return pivot; }, get camMode() { return camMode; } };
 }
 Alerts.armNotify();
@@ -2002,6 +2051,7 @@ let lastArrowRescale = 0;
   const lowAlt = cr - R < 1.5;
   gratGrp.visible = !lowAlt;
   if (coastGrp) coastGrp.visible = !lowAlt;
+  terminator.updateForAltitude(cr - R);
   // Nation names: font scales with altitude, and label density follows
   // LABELRANK so small-nation clusters (Europe, Caribbean) don't overlap
   // until you're close enough for them to separate. Hidden on deep zoom.
