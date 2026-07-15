@@ -6,7 +6,7 @@ seismic, conflict, GPS-jamming, thermal, launches, airports, cities, and bike
 share — with deep-zoom imagery + 3D buildings, weather radar, a 4D time
 scrubber, an alert engine, and a local-LLM intel report.
 
-**Repo:** github.com/Daswolfe/Argus (private) · **Last updated:** 2026-07-10
+**Repo:** github.com/Daswolfe/Sentinel (private) · **Last updated:** 2026-07-14
 
 ---
 
@@ -318,11 +318,27 @@ the "S" in OSINT. **All items shipped:**
     health strip shows REPLAY. Bundled demo tape:
     `server/data/demo-scenario.ndjson` (Europe/Med box). Unit-tested.
 
+### Theme 5 — Multi-user distribution *(⏸ SHELVED per operator, 2026-07-14)*
+One backend (one set of keys) serving several trusted viewers, each in their
+own browser window. Plan is drawn up; resume when wanted:
+1. **Shared upstream TTL cache** — cache proxied responses (OpenSky ~20 s,
+   milair ~20 s, etc.) so N viewers cost one key's quota. The critical piece.
+2. **Token support in the frontend** — `?token=` picked up once, persisted,
+   attached to every fetch + the WS; auth gate scoped to /api + /ws only
+   (static assets open, else the page can't even load).
+3. **Exposure**: Tailscale tailnet (recommended, private) or Cloudflare
+   Tunnel (public HTTPS URL, optional email-gated Access).
+4. Optional: viewer build of the Tauri shell pointing at the remote URL.
+Foundations already shipped: static serving w/ same-origin /api + /ws,
+per-IP rate limiting + WS caps, server-side Google-tiles meter, WS broadcast
+backpressure guard (§Optimization).
+
 ### Recommended next 3 moves
-1. **Tauri desktop app** (#19) — blocked on installing the Rust toolchain.
-2. **Diagnose the shelved Google 3D Tiles render-pass conflict** (#13).
-3. **Contributor on-ramp** (#16) — currently shelved per operator; everything
-   else in Themes 1–4 and the §7 filter backlog is shipped.
+1. **Diagnose the shelved Google 3D Tiles render-pass conflict** (#13).
+2. **Multi-user distribution** (Theme 5) when unshelved.
+3. **Route-anomaly lane baseline** (§3) — the last unbuilt analytic; the SQLite
+   track archive has been accumulating since 07-08. Contributor on-ramp (#16)
+   stays shelved.
 
 ---
 
@@ -356,6 +372,12 @@ name), ✅ route stage (climb/cruise/descent, ±300 ft/min).
 
 ## 8. Changelog (high level)
 
+- **2026-07-14 (optimization pass)** — Copilot notes triaged (§10): persistent
+  point + trail GPU buffers w/ drawRange (no more per-plot Float32Array churn),
+  fixed conservative bounding spheres (raycast never recomputes), region filter
+  reads meta lat/lon instead of inverse trig, shared arrow geometries, WS
+  broadcast backpressure guard. Heap growth at 13k vessels: negative over 40 s.
+  Multi-user distribution planned + shelved as Theme 5.
 - **2026-07-14 (later)** — **Theme 4 effectively complete**: recorded-scenario
   replay (#20, AIS_RECORD/AIS_REPLAY NDJSON tape through the real ingest path +
   bundled Europe demo tape + REPLAY health badge); dark-ship pulse beacons
@@ -420,78 +442,49 @@ name), ✅ route stage (climb/cruise/descent, ±300 ft/min).
    staggered per MMSI, altitude-scaled, tinted by the DARK layer colour, two
    draw calls total (instanced).
 
-some suggestions for optimization down the road. take with a grain of salt, it is from copilot.
+## 10. Optimization pass (2026-07-14) — Copilot notes triaged
 
-Large/batched JSON over websockets — server broadcast (server/index.js)
-Where: broadcast() serializes the full update then sends to every client (server/index.js: lines ~264–269 and relay → server wiring).
-Why it can hurt: with large batches (many vessels) the serialized payload is large and is sent to every client frequently (broadcastMs = 2000ms). This increases CPU (serializing), memory (big strings), network bandwidth and can create backpressure on slow clients.
-Fixes:
-Send deltas instead of full frames; keep per-client cursors or sequence deltas.
-Use binary formats (MessagePack, CBOR, or compact ArrayBuffers) for large numeric arrays.
-Limit broadcast frequency or aggregate/priority-reduce fields (strip rarely-used meta on the wire).
-Respect socket backpressure (check send callbacks / detect slow clients and drop or buffer carefully).
-Hot allocation of Float32Array / attributes on each plot — layer plotting (web/src/registry.js)
-Where: setLayerData/_plot() replaces the 'position' attribute with new Float32Array(...) and calls computeBoundingSphere (registry.js: ~132–160, ~156–158).
-Why it can hurt: creating new typed arrays per update for many layers/points creates GC pressure and frequent GPU buffer uploads; computeBoundingSphere is O(n) and expensive.
-Fixes:
-Pre-allocate a capacity BufferAttribute per layer and write into its array view, then set attribute.needsUpdate = true and update attribute.count/drawRange.
-Only call computeBoundingSphere when geometry size/extent actually changes (or compute a conservative, cached sphere).
-Reuse buffers across updates; avoid allocating new Float32Array each frame.
-Per-instance matrix updates and rescaling loops — instanced arrows (web/src/registry.js + web/src/markers.js)
-Where: _ensureArrow + arrow setMatrixAt loops and rescaleArrows recompute/ setMatrixAt for every instance (registry.js: ~91–127, ~182–219; markers.arrowMatrix: ~190–207).
-Why it can hurt: per-instance matrix computation for thousands of instances each update is CPU-heavy (math + allocations), and instanceMatrix.needsUpdate forces large GPU uploads.
-Fixes:
-Only update matrices for instances that actually moved or whose scale changed.
-Use smaller update batches or a GPU-side approach (e.g., storing per-instance data in a single typed buffer and using a shader-based rotation).
-Throttle rescale and avoid rebuilding instance matrices if change is negligible (already has a 12% threshold — you can increase or make it distance/LOD-aware).
-Trail geometry rebuild and memory churn — TrailSet (web/src/markers.js)
-Where: TrailSet.rebuild creates new Float32Array(pos) and Float32Array(col) frequently (markers.js: ~59–86).
-Why it can hurt: with many tracked contacts, rebuilding arrays and replacing geometry every rebuild causes large temporary allocations and heap churn.
-Fixes:
-Reuse a typed buffer and write into it, then set attribute.needsUpdate.
-Increase rebuild throttle for high counts, or switch to lower fidelity trails when many objects are present.
-Limit per-contact history dynamically by scale/zoom or region focus.
-Full scans of all vessels in hot loops — dark-scan/evict (server/ais.js)
-Where: _scanDark() scans all vessels every scanIntervalMs (60s) and _evict() iterates all vessels regularly (ais.js: ~185–216).
-Why it can hurt: if vessels map grows large (~tens of thousands), iterating every minute/5 minutes is O(n) work and can spike CPU. Combined with other server work this can add latency.
-Fixes:
-Keep a priority/expiry queue keyed by lastSeen so you only visit potentially-expired entries.
-Make dark-scan incremental (process a slice each tick) or schedule checks per-vessel based on lastSeen + threshold.
-Avoid repeated expensive operations inside the loop (cache Date.now once per run).
-Recomputing lat/lon and heavy math inside region filtering (web/src/registry.js)
-Where: _regionFilter recomputes lat/lon from xyz for every point, and does trigonometry for satellites (registry.js: ~225–258).
-Why it can hurt: inverse trig (sqrt, acos, atan2) per point per filtering pass is expensive at scale.
-Fixes:
-Store source lat/lon/alt in meta at load time so you can test bbox/LOS without inverting every frame.
-Use bounding-volume culling or coarse grids to prefilter points before exact tests.
-Frequent Date.now(), object creation, and small allocations in tight loops (multiple files)
-Where: TrailSet.push (markers.js), AisRelay._ingest (ais.js) pushes to arrays and constructs objects repeatedly (e.g., v.track push and shift).
-Why it can hurt: many tiny allocations and Date.now calls create GC overhead and can increase tail-latency.
-Fixes:
-Hoist Date.now to a local variable when used in loops.
-Use pooled objects or typed buffers for hot data (tracks can be compacted to Float32 + timestamps).
-Avoid frequent array.shift (O(n)) — consider circular buffers.
-UI/main-thread blocking: sync localStorage writes, DOM updates, and heavy render work (web/src/main.js)
-Where: multiple localStorage.setItem(JSON.stringify(...)) helpers are present and stringifying large objects synchronously (main.js: lines showing save functions).
-Why it can hurt: localStorage is synchronous and JSON.stringify of large objects blocks the main thread and can cause jank; heavy DOM or innerHTML updates in large loops also block frames.
-Fixes:
-Debounce/throttle localStorage writes; write to IndexedDB or Worker for large payloads.
-Batch DOM updates using DocumentFragment or requestAnimationFrame and avoid innerHTML in tight loops.
-Offload heavy computation (decoding, indexing) to Web Workers.
-Texture/geometry re-creation instead of reuse (web/src/markers.js and registry.js)
-Where: chevronGeometry(), quadGeometry(), directionalIconTexture(), and CanvasTexture creation are done on-demand; some geometries/materials are recreated when icon kind changes (markers.js: ~98–123, registry.js: ~95–127).
-Why it can hurt: repeatedly creating geometries/textures and disposing materials costs CPU and GPU resource churn.
-Fixes:
-Cache shared geometries and materials globally and reuse them across layers/instances.
-Only dispose when truly necessary.
-Network and resource storms from many auto-refresh timers (web/src/registry.js)
-Where: registry.start() calls each def.load and sets setInterval per layer if def.interval (registry.js: ~420–436).
-Why it can hurt: many layers with overlapping intervals can cause bursty network load and CPU spikes.
-Fixes:
-Stagger layer refreshes, back off under heavy load, or coordinate network requests via a central fetch queue.
-Use adaptive intervals based on visibility/region focus (don’t fetch heavy data when layer is off-screen).
-Backend: streaming proxy handling and chunk copies (server/index.js)
-Where: /llm endpoint reads upstream.body.getReader() and writes Buffer.from(value) per chunk (index.js: ~102–107).
-Why it can hurt: each chunk copy creates new Buffer object; for high throughput stream you may allocate many small buffers.
-Fixes:
-Pipe streams when possible (stream pipeline) to avoid copying, or use readable.pipeTo/writable streams API to forward bytes.
+The end-of-file Copilot suggestions were audited item by item; the raw dump is
+replaced by this disposition record. Heap check after: **negative growth over
+40 s at 13k live vessels** (was multi-MB/s of GC churn).
+
+**Implemented**
+- **Persistent point buffers** (`registry.js _plot`) — capacity-grown (1.5x)
+  BufferAttribute written in place + `setDrawRange`, replacing a fresh
+  Float32Array + attribute swap per plot; fixed conservative bounding sphere
+  (r=800, covers GEO) set once so `Points.raycast` never forces an O(n)
+  `computeBoundingSphere` (points are never frustum-culled anyway).
+- **Trail buffers reused** (`markers.js TrailSet.rebuild`) — two-pass
+  count-then-fill into persistent position/colour arrays + drawRange; was
+  rebuilding multi-MB JS arrays -> Float32Arrays every 1.2 s per mover layer.
+- **Region filter without trig** (`registry.js _regionFilter`) — bbox test
+  reads the lat/lon every layer already stores in meta; the sqrt/acos/atan2
+  inversion survives only as a fallback for meta without coordinates.
+- **Shared arrow geometry** (`registry.js _ensureArrow`) — one chevron/quad
+  geometry per kind for all layers and capacity rebuilds; only materials and
+  instance buffers are per-layer now.
+- **WS backpressure guard** (`server broadcast()`) — clients with >8 MB
+  buffered are skipped for that frame; updates are cumulative deltas so a
+  dropped frame is superseded by the next.
+
+**Already true (Copilot premise wrong)**
+- "Full frames over WS" — `update` broadcasts were always dirty-only batches,
+  serialized once for all clients; full state only on connect (snapshot).
+- Directional icon textures were already cached (`_dirTexCache`); point-sprite
+  glyphs likewise (`_iconCache`); `Date.now()` already hoisted in scan loops.
+
+**Skipped, with rationale**
+- *Binary WS frames (MessagePack/CBOR)* — real bandwidth win at 10x current
+  scale; big client+server refactor now. Revisit with Theme 5.
+- *Per-instance "only update moved" arrow matrices* — movers move every
+  update; diffing costs what writing costs. The 12% rescale threshold +
+  150 ms throttle already bound the rescale path.
+- *`_scanDark`/`_evict` expiry queues* — a 30k-vessel scan of cheap field
+  checks once a minute is sub-millisecond; a priority queue is complexity
+  without measurable benefit.
+- *`v.track.shift()` / small-object pooling in `_ingest`* — arrays are <=72
+  entries; noise.
+- *`/llm` chunk copies* — token-stream chunks are tiny and low-rate.
+- *Staggered layer timers* — intervals already differ (30 s / 60 s / 15 min);
+  collisions are rare and harmless.
+- *localStorage writes* — saves are small and event-driven, never per-frame.

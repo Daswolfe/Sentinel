@@ -26,12 +26,25 @@ export class TrailSet {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
     geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(0), 3));
+    // Never frustum-culled; a fixed conservative sphere keeps three.js from
+    // ever running an O(n) computeBoundingSphere over the trail soup.
+    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 800);
     this.obj = new THREE.LineSegments(
       geo,
       new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.85 }),
     );
     this.obj.frustumCulled = false;
     scene.add(this.obj);
+  }
+
+  // Grow-only persistent buffers: rebuilding into fresh Float32Arrays every
+  // 1.2 s was multi-MB/s of GC churn with 10k+ vessels' trails.
+  _ensureCapacity(verts) {
+    const geo = this.obj.geometry;
+    if (geo.attributes.position.array.length >= verts * 3) return;
+    const cap = Math.ceil(verts * 1.5) * 3;
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(cap), 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(cap), 3));
   }
 
   setColor(hex) {
@@ -62,27 +75,38 @@ export class TrailSet {
     // always the current truth.
     if (now - this._lastRebuild < this.rebuildMs) return;
     this._lastRebuild = now;
-    const pos = [];
-    const col = [];
-    const c = this.color;
+    // Pass 1: prune + count segments so the persistent buffers can be sized.
+    let segs = 0;
     for (const [id, a] of this.hist) {
       if (aliveIds && !aliveIds.has(id)) {
         this.hist.delete(id);
         continue;
       }
       while (a.length && now - a[0].t > this.maxAgeMs) a.shift();
+      if (a.length > 1) segs += a.length - 1;
+    }
+    this._ensureCapacity(segs * 2);
+    // Pass 2: write segment pairs straight into the GPU-bound arrays.
+    const g = this.obj.geometry;
+    const pos = g.attributes.position.array;
+    const col = g.attributes.color.array;
+    const c = this.color;
+    let o = 0;
+    for (const a of this.hist.values()) {
       for (let i = 1; i < a.length; i++) {
-        const f0 = Math.max(0, 1 - (now - a[i - 1].t) / this.maxAgeMs);
-        const f1 = Math.max(0, 1 - (now - a[i].t) / this.maxAgeMs);
-        pos.push(a[i - 1].x, a[i - 1].y, a[i - 1].z, a[i].x, a[i].y, a[i].z);
-        col.push(c.r * f0, c.g * f0, c.b * f0, c.r * f1, c.g * f1, c.b * f1);
+        const p0 = a[i - 1], p1 = a[i];
+        const f0 = Math.max(0, 1 - (now - p0.t) / this.maxAgeMs);
+        const f1 = Math.max(0, 1 - (now - p1.t) / this.maxAgeMs);
+        pos[o] = p0.x; pos[o + 1] = p0.y; pos[o + 2] = p0.z;
+        col[o] = c.r * f0; col[o + 1] = c.g * f0; col[o + 2] = c.b * f0;
+        pos[o + 3] = p1.x; pos[o + 4] = p1.y; pos[o + 5] = p1.z;
+        col[o + 3] = c.r * f1; col[o + 4] = c.g * f1; col[o + 5] = c.b * f1;
+        o += 6;
       }
     }
-    const g = this.obj.geometry;
-    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
-    g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(col), 3));
     g.attributes.position.needsUpdate = true;
-    g.computeBoundingSphere();
+    g.attributes.color.needsUpdate = true;
+    g.setDrawRange(0, o / 3);
   }
 
   setVisible(on) {

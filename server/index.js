@@ -539,9 +539,12 @@ wss.on('connection', (ws, req) => {
 });
 
 function broadcast(obj) {
-  const data = JSON.stringify(obj);
+  const data = JSON.stringify(obj); // serialized once for all clients
   for (const client of wss.clients) {
-    if (client.readyState === 1) client.send(data);
+    // Backpressure: a client that can't drain 8 MB is stalled — skip it rather
+    // than buffer without bound. Update batches are cumulative-state deltas,
+    // so a dropped frame is simply superseded by the next one.
+    if (client.readyState === 1 && client.bufferedAmount < 8e6) client.send(data);
   }
 }
 relay.on('update', (vessels) => broadcast({ type: 'update', vessels }));

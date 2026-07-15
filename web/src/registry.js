@@ -67,6 +67,10 @@ export class LayerContext {
   _register(def) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
+    // Fixed conservative bounds: points are never frustum-culled, but
+    // Points.raycast() would force an O(n) computeBoundingSphere() on every
+    // geometry swap without this. Radius covers everything up to GEO orbit.
+    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 800);
     const mat = new THREE.PointsMaterial({
       color: def.color,
       size: def.size ?? 3.4,
@@ -92,6 +96,15 @@ export class LayerContext {
     this.layers.set(def.id, L);
   }
 
+  // One base geometry per marker kind, shared by every layer and every
+  // capacity rebuild (only the InstancedMesh's instance buffer is per-layer).
+  static _arrowGeo = new Map();
+  static _arrowGeoFor(kind) {
+    let g = this._arrowGeo.get(kind);
+    if (!g) this._arrowGeo.set(kind, (g = kind === 'chevron' ? chevronGeometry() : quadGeometry()));
+    return g;
+  }
+
   // Grow (or create) a layer's oriented-marker InstancedMesh to hold `count`
   // markers. Rebuilt when capacity is exceeded OR the icon kind changed
   // (chevron ⇄ textured plane/heli need different geometry + material).
@@ -100,26 +113,23 @@ export class LayerContext {
     if (L.arrow && count <= L.arrowMax && L.arrowKind === kind) return L.arrow;
     if (L.arrow) {
       this.scene.remove(L.arrow);
-      L.arrow.geometry.dispose();
-      L.arrow.material.dispose();
+      L.arrow.material.dispose(); // geometry is shared — never disposed
+      L.arrow.dispose(); // frees the instance buffer
     }
     const max = Math.max(1, Math.ceil(count * 1.5));
     const color = L.def.css || L.def.color;
-    let geo, mat;
-    if (kind === 'chevron') {
-      geo = chevronGeometry();
-      mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, side: THREE.DoubleSide });
-    } else {
-      geo = quadGeometry();
-      mat = new THREE.MeshBasicMaterial({
-        map: directionalIconTexture(kind),
-        color,
-        transparent: true,
-        alphaTest: 0.35,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      });
-    }
+    const geo = LayerContext._arrowGeoFor(kind);
+    const mat =
+      kind === 'chevron'
+        ? new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, side: THREE.DoubleSide })
+        : new THREE.MeshBasicMaterial({
+            map: directionalIconTexture(kind),
+            color,
+            transparent: true,
+            alphaTest: 0.35,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+          });
     const mesh = new THREE.InstancedMesh(geo, mat, max);
     mesh.frustumCulled = false;
     mesh.visible = L.visible;
@@ -173,9 +183,19 @@ export class LayerContext {
       pos = keepPos;
       meta = keepMeta;
     }
-    L.points.geometry.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    L.points.geometry.attributes.position.needsUpdate = true;
-    L.points.geometry.computeBoundingSphere();
+    // Upload into a persistent capacity-grown buffer instead of swapping in a
+    // fresh BufferAttribute per plot: at 10k+ vessels every 2 s, allocating
+    // new Float32Arrays (+ an O(n) computeBoundingSphere — the fixed sphere
+    // from _register covers raycasting) was megabytes/second of GC churn.
+    const geo = L.points.geometry;
+    let attr = geo.attributes.position;
+    if (attr.array.length < pos.length) {
+      attr = new THREE.BufferAttribute(new Float32Array(Math.ceil(meta.length * 1.5) * 3), 3);
+      geo.setAttribute('position', attr);
+    }
+    attr.array.set(pos);
+    attr.needsUpdate = true;
+    geo.setDrawRange(0, meta.length);
     L.meta = meta;
     this.ui.count(L.def.id, meta.length);
 
@@ -261,8 +281,12 @@ export class LayerContext {
           Math.sin(uLat) * Math.sin(sLat) +
           Math.cos(uLat) * Math.cos(sLat) * Math.cos(sLon - uLon);
         keep = cosSep >= 6371 / (6371 + (m.altKm ?? 500));
+      } else if (meta[i].lat != null) {
+        // Every layer records its source lat/lon in meta — no per-point trig.
+        const { lat, lon } = meta[i];
+        keep = lat >= lamin && lat <= lamax && lon >= lomin && lon <= lomax;
       } else {
-        // Invert llToV to recover the point's origin lat/lon.
+        // Fallback for meta without coordinates: invert llToV (sqrt/acos/atan2).
         const r = Math.sqrt(x * x + y * y + z * z) || 1;
         const lat = 90 - (Math.acos(y / r) * 180) / Math.PI;
         let lon = (Math.atan2(z, -x) * 180) / Math.PI - 180;
