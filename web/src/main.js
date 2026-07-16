@@ -653,6 +653,19 @@ ctx.ui = ui;
 const tripwires = new Tripwires(scene, ctx, () => renderTripwiresPanel());
 const twStatsHtml = (b) =>
   `IN <b>${b.tallies.in}</b> · IN-TOTAL <b>${b.tallies.entries}</b> · OUT <b>${b.tallies.exits}</b>`;
+// Recent crossings — WHO crossed, clickable to re-focus the contact.
+const TW_LAYER_TAG = { SEA: 'SHIP', DARK: 'DARK', AIR: 'AIR', MILAIR: 'MIL' };
+const twLogHtml = (b) =>
+  (b.log ?? [])
+    .slice(0, 8)
+    .map(
+      (ev, i) =>
+        `<div class="twEv" data-tw="${b.id}" data-ev="${i}" title="Click to focus this contact">` +
+        `<b class="${ev.dir === 'in' ? 'twIn' : 'twOut'}">${ev.dir === 'in' ? '⇢' : '⇠'}</b>` +
+        `${(ev.name || '?').toString().slice(0, 22).replace(/</g, '&lt;')}` +
+        `<i>${TW_LAYER_TAG[ev.layer] ?? ev.layer}</i><span>${timeAgo(ev.t)}</span></div>`,
+    )
+    .join('');
 function renderTripwiresPanel() {
   const drawing = !!tripwires.drawing;
   document.getElementById('twDraw').style.display = drawing ? 'none' : '';
@@ -680,7 +693,8 @@ function renderTripwiresPanel() {
           <span class="twReset" data-tw="${b.id}" title="Reset counts">↺</span>
           <span class="twDel" data-tw="${b.id}" title="Delete tripwire">✕</span></div>
         <div class="twStats" id="twStats-${b.id}">${twStatsHtml(b)}</div>
-        <div class="twCls">${cls}</div></div>`;
+        <div class="twCls">${cls}</div>
+        <div class="twLog" id="twLog-${b.id}">${twLogHtml(b)}</div></div>`;
     })
     .join('');
 }
@@ -688,6 +702,8 @@ function updateTripwireStats() {
   for (const b of tripwires.boxes) {
     const el = document.getElementById('twStats-' + b.id);
     if (el) el.innerHTML = twStatsHtml(b);
+    const lg = document.getElementById('twLog-' + b.id);
+    if (lg) lg.innerHTML = twLogHtml(b);
   }
 }
 document.getElementById('twDraw').addEventListener('click', () => {
@@ -722,6 +738,14 @@ document.getElementById('twNation').addEventListener('change', (e) => {
 });
 const twList = document.getElementById('twList');
 twList.addEventListener('click', (e) => {
+  // Crossing-log row → re-focus that contact (live position if still on plot).
+  const evRow = e.target.closest('.twEv');
+  if (evRow) {
+    const b = tripwires.boxes.find((x) => x.id === evRow.dataset.tw);
+    const ev = b?.log?.[+evRow.dataset.ev];
+    if (ev) focusContact({ icao: ev.icao, mmsi: ev.mmsi }, ev.lat, ev.lon, ev.name);
+    return;
+  }
   const id = e.target.dataset?.tw;
   if (!id) return;
   if (e.target.classList.contains('twDel')) tripwires.remove(id);
@@ -793,8 +817,8 @@ function renderDossierPanel() {
         const evs = d.events
           .slice(0, 25)
           .map(
-            (e) =>
-              `<div class="dosEv"><b>${e.type}</b> ${e.summary}<span>${new Date(e.t).toUTCString().slice(5, 22)}</span></div>`,
+            (e, i) =>
+              `<div class="dosEv" data-code="${d.code}" data-i="${i}" title="Click to focus this event/contact"><b>${e.type}</b> ${e.summary}<span>${new Date(e.t).toUTCString().slice(5, 22)}</span></div>`,
           )
           .join('');
         body =
@@ -877,6 +901,13 @@ document.getElementById('hResults').addEventListener('click', (e) => {
 document.getElementById('dosList').addEventListener('click', (e) => {
   const code = e.target.closest('[data-code]')?.dataset.code;
   if (!code) return;
+  // Event row → fly to the contact (live if possible, else where it happened).
+  const evRow = e.target.closest('.dosEv');
+  if (evRow) {
+    const ev = dossiers.get(code)?.events[+evRow.dataset.i];
+    if (ev) focusContact(ev.ref, ev.lat, ev.lon, ev.type);
+    return;
+  }
   if (e.target.classList.contains('dosBrief')) {
     const out = document.getElementById('dosBrief-' + code);
     out.style.display = 'block';
@@ -1347,6 +1378,28 @@ function flyTo(lat, lon, dist = 190) {
 // Resolve an alert's contact to its CURRENT position. Alerts are fired where the
 // event happened (e.g. where a 7700 squawk began), but the contact has since
 // moved — so re-find it live by icao/mmsi. Returns {lat,lon} or null if gone.
+// Fly to a logged contact (tripwire crossing, dossier event): prefer the LIVE
+// contact — opening its detail panel — and fall back to the recorded position
+// when it has left the plot.
+function focusContact(ref, lat0, lon0, label = 'Contact') {
+  let m = null;
+  if (ref?.icao)
+    for (const id of ['AIR', 'MILAIR']) m ??= ctx.metaFor(id).find((x) => x.icao === ref.icao);
+  if (!m && ref?.mmsi != null)
+    for (const id of ['SEA', 'DARK'])
+      m ??= ctx.metaFor(id).find((x) => String(x.mmsi) === String(ref.mmsi));
+  if (m && m.lat != null) {
+    flyTo(m.lat, m.lon, 30);
+    onPick(m);
+    ui.tick(`Camera on ${m.headline} (live)`);
+  } else if (lat0 != null && isFinite(+lat0)) {
+    flyTo(+lat0, +lon0, 30);
+    ui.tick(`${label} no longer on plot — showing recorded position`);
+  } else {
+    ui.tick(`${label} no longer on plot`);
+  }
+}
+
 function liveContactPos(ref) {
   if (!ref) return null;
   if (ref.icao) {
@@ -1403,10 +1456,20 @@ function makePanels() {
     if (!h || !el.id) continue;
     const st = (saved[el.id] ??= {});
     if (st.left != null) {
-      el.style.left = st.left + 'px';
-      el.style.top = st.top + 'px';
-      el.style.right = 'auto';
-      el.style.bottom = 'auto';
+      // A saved position that's substantially off the CURRENT viewport (window
+      // resized, or a drag that ran away) is stale — drop it and let the CSS
+      // default placement win, so no panel can ever restore out of reach.
+      const w = el.offsetWidth || 250;
+      if (st.left > innerWidth - 60 || st.left < 60 - w || st.top > innerHeight - 40 || st.top < 0) {
+        delete st.left;
+        delete st.top;
+        save();
+      } else {
+        el.style.left = st.left + 'px';
+        el.style.top = st.top + 'px';
+        el.style.right = 'auto';
+        el.style.bottom = 'auto';
+      }
     }
     // SOCINT is a stub — starts collapsed so it can't cover real panels
     // (e.g. the airport diagram in CONTACT DETAIL).

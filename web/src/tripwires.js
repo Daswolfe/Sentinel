@@ -127,7 +127,7 @@ export class Tripwires {
   }
   reset(boxId) {
     const b = this.boxes.find((x) => x.id === boxId);
-    if (b) { b.tallies = { in: b.tallies.in, entries: 0, exits: 0 }; this._save(); this.onChange(); }
+    if (b) { b.tallies = { in: b.tallies.in, entries: 0, exits: 0 }; b.log = []; this._save(); this.onChange(); }
   }
   remove(boxId) {
     this.boxes = this.boxes.filter((x) => x.id !== boxId);
@@ -144,23 +144,47 @@ export class Tripwires {
     let crossed = false;
     for (const b of this.boxes) {
       const now = new Set();
+      const info = new Map(); // id -> contact details (for the crossing log)
       const rings = boxRings(b);
       for (const cls of CLASSES) {
         if (!b.classes[cls.id]) continue;
         for (const m of this.ctx.metaFor(cls.id)) {
           if (m.lat == null) continue;
-          if (pointInRings(m.lat, m.lon, rings)) now.add(m.icao ?? m.mmsi ?? m.headline);
+          if (pointInRings(m.lat, m.lon, rings)) {
+            const id = m.icao ?? m.mmsi ?? m.headline;
+            now.add(id);
+            info.set(id, {
+              name: m.headline, layer: cls.id,
+              icao: m.icao, mmsi: m.mmsi, lat: m.lat, lon: m.lon,
+            });
+          }
         }
       }
       if (b.primed) {
-        for (const id of now) if (!b.inside.has(id)) { b.tallies.entries++; crossed = true; }
-        for (const id of b.inside) if (!now.has(id)) { b.tallies.exits++; crossed = true; }
+        for (const id of now)
+          if (!b.inside.has(id)) { b.tallies.entries++; crossed = true; this._log(b, 'in', id, info.get(id)); }
+        // Exits: the contact is no longer inside (maybe gone from the plot), so
+        // its details come from the PREVIOUS scan's snapshot.
+        for (const id of b.inside)
+          if (!now.has(id)) { b.tallies.exits++; crossed = true; this._log(b, 'out', id, b._info?.get(id)); }
       }
       b.primed = true;
       b.inside = now;
+      b._info = info;
       b.tallies.in = now.size;
     }
     if (crossed) this._save(); // persist only when a crossing actually happened
+  }
+
+  // Crossing log: WHO crossed, not just how many — clickable in the panel to
+  // re-focus the contact. Newest first, capped.
+  _log(b, dir, id, m) {
+    (b.log ??= []).unshift({
+      t: Date.now(), dir,
+      name: m?.name ?? String(id), layer: m?.layer ?? '?',
+      icao: m?.icao, mmsi: m?.mmsi, lat: m?.lat, lon: m?.lon,
+    });
+    if (b.log.length > 40) b.log.length = 40;
   }
 
   /* ── rendering ───────────────────────────────────────────────── */
@@ -186,7 +210,7 @@ export class Tripwires {
         JSON.stringify(
           this.boxes.map((b) => ({
             id: b.id, name: b.name, airspace: b.airspace, verts: b.verts, rings: b.rings,
-            color: b.color, classes: b.classes, tallies: b.tallies,
+            color: b.color, classes: b.classes, tallies: b.tallies, log: (b.log ?? []).slice(0, 40),
           })),
         ),
       );

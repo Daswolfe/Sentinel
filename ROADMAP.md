@@ -372,6 +372,15 @@ name), ✅ route stage (climb/cruise/descent, ±300 ft/min).
 
 ## 8. Changelog (high level)
 
+- **2026-07-15 (fixes + panel interactivity)** — Filter rows now wrap inside
+  the layers panel (`>600KT` / density select overflowed the border); stale
+  panel positions that restore off the current viewport are discarded (the
+  alerts panel had been dragged off-screen and persisted there). **Tripwire
+  crossing log**: each box records WHO crossed (name, class, in/out, time,
+  position), last 8 shown in the panel, click → re-focus the contact live
+  (detail panel) with recorded-position fallback; ↺ reset clears the log too.
+  **Dossier events clickable**: click an event → fly to the contact (live via
+  its icao/mmsi ref — now stored per event — else the recorded position).
 - **2026-07-15 (QoL wave)** — **Two-level imagery pyramid** (`tiles.js`): a
   coarse skirt (zoom−3, 8× width) under the fine 5×5 patch kills the black
   screen edges in tilted/panning deep-zoom views (verified: all four screen

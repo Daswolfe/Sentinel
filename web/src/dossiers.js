@@ -40,7 +40,9 @@ export class Dossiers {
       d = { code, name: NAT_OPTIONS[code] || code, events: [], firstSeen: now, lastSeen: now };
       this.map.set(code, d);
     }
-    d.events.unshift({ t: now, type: rec.title, summary: rec.msg, lat: rec.lat, lon: rec.lon });
+    // `ref` (icao/mmsi) is kept so clicking the event later can re-resolve the
+    // contact's LIVE position instead of where the event was born.
+    d.events.unshift({ t: now, type: rec.title, summary: rec.msg, lat: rec.lat, lon: rec.lon, ref: rec.ref });
     if (d.events.length > MAX_EVENTS) d.events.length = MAX_EVENTS;
     d.lastSeen = now;
     this._prune();
