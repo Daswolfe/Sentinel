@@ -8,6 +8,26 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PortIndex, loadPorts } from './ports.js';
+import { CoastIndex, loadCoast } from './coast.js';
+
+test('coast index: nearshore vs open ocean (STS shore rule)', () => {
+  const c = loadCoast();
+  assert.ok(c.count > 40000, 'coast.json should carry ~53k samples');
+  // Dover strait, ~1 nm off the English coast — near shore at 5 nm.
+  assert.ok(c.withinNm(51.13, 1.4, 5), 'off Dover is near shore');
+  // Mid-Atlantic — nowhere near a coastline.
+  assert.equal(c.withinNm(30.0, -40.0, 5), false, 'mid-Atlantic is open ocean');
+  // Fujairah bunkering anchorage sits ~5-10 nm off the UAE coast: near at 12,
+  // clear at 2 (the sample spacing is ~2 nm so use generous margins).
+  assert.ok(c.withinNm(25.15, 56.37, 12), 'Fujairah roads within 12 nm of shore');
+  // High latitude: longitude cells shrink — the query must still find land.
+  assert.ok(c.withinNm(69.65, 18.95, 5), 'Tromsø harbour is near shore');
+});
+
+test('coast index: empty index disables the rule harmlessly', () => {
+  const c = new CoastIndex([]);
+  assert.equal(c.withinNm(51.13, 1.4, 5), false);
+});
 
 test('port index matches known anchorages', () => {
   const p = loadPorts();

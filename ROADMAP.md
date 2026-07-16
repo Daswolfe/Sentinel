@@ -69,7 +69,9 @@ layer never touches the core.
   anchorages/ports: NGA World Port Index (~2,900) **+ GFW named anchorages
   (~14,700, AIS-derived** from 166k S2 cells) + curated chokepoint seeds.
 - **STS-transfer detection** (`analytics.js`) — stationary pairs ≤500 m, away
-  from any anchorage, ≥25 min → alert.
+  from any anchorage AND ≥5 nm from any coastline (`STS_MIN_SHORE_NM`, Natural
+  Earth 50m coast samples in `server/coast.js`), ≥25 min → alert. The shore
+  rule kills rafted-ship false positives in uncharted nearshore roadsteads.
 - **Loitering detection** (`analytics.js`) — a single vessel stationary in open
   water (anchorage-filtered) ≥3 h → alert. The GFW anchorage index is what makes
   this precise.
@@ -372,6 +374,14 @@ name), ✅ route stage (climb/cruise/descent, ±300 ft/min).
 
 ## 8. Changelog (high level)
 
+- **2026-07-16 (detector tuning)** — **STS shore rule**: candidate pairs must
+  now be ≥5 nm from any coastline (new `server/coast.js` — ~53k Natural Earth
+  50m coast samples @ ~2 nm via `convert-coast.mjs`; `STS_MIN_SHORE_NM` to
+  tune, 0 disables; `stsShoreSuppressed` in /health) — stops flagging ships
+  rafted together in nearshore roadsteads the anchorage DB doesn't cover.
+  **Surveillance-orbit threshold** raised 1.5 → 10 full loops: practice
+  circuits (touch-and-go pattern work) no longer false-flag; real ISR orbits
+  hold station long enough to clear 10.
 - **2026-07-15 (fixes + panel interactivity)** — Filter rows now wrap inside
   the layers panel (`>600KT` / density select overflowed the border); stale
   panel positions that restore off the current viewport are discarded (the

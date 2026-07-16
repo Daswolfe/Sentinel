@@ -16,7 +16,10 @@ import { GLOBE_R, llToV } from './globe.js';
 const WINDOW_MS = 30 * 60e3;   // analyse the last 30 min of track
 const MIN_POINTS = 6;          // need a handful of fixes first
 const MIN_SPAN_MS = 4 * 60e3;  // …spanning at least this long
-const MIN_LOOPS = 1.5;         // ≥ 1.5 revolutions around the centroid
+// ≥ 10 full revolutions: aircraft flying practice circuits (touch-and-go
+// patterns wind 3–8 loops in half an hour) were false-flagging at 1.5; a
+// genuine ISR orbit holds station far longer than any pattern-work session.
+const MIN_LOOPS = 10;
 const MAX_RADIUS_KM = 55;      // bounded loiter, not a wide transit
 const MIN_RADIUS_KM = 0.6;     // actually circling, not parked on the ramp
 const LAYERS = ['AIR', 'MILAIR'];

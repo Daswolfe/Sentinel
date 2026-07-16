@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { getJamming } from './gpsjam.js';
 import { getConflict } from './gdelt.js';
+import { loadCoast } from './coast.js';
 
 // Tier-3 analytics over the live picture.
 //
@@ -21,6 +22,10 @@ import { getConflict } from './gdelt.js';
 
 const STOP_SOG = 0.8;        // kt — effectively stationary
 const PAIR_M = 500;          // metres between the pair
+// STS pairs must sit at least this far off any coastline: side-by-side ships a
+// mile off a beach are an anchorage/roadstead scene even when no charted
+// anchorage covers them. Real covert transfers happen well offshore.
+const STS_SHORE_NM = Math.max(0, Number(process.env.STS_MIN_SHORE_NM ?? 5));
 const HOLD_MS = 25 * 60e3;   // STS: sustained this long => candidate
 const LOITER_MS = 3 * 3600e3; // loiter: stopped in open water this long => flag
 const SCAN_MS = 5 * 60e3;
@@ -39,9 +44,10 @@ export class Analytics extends EventEmitter {
   constructor(relay) {
     super();
     this.relay = relay;
+    this.coast = loadCoast(); // ~53k coastline samples for the shore rule
     this.pairs = new Map();  // "mmsiA-mmsiB" -> { t0, alerted }   (STS)
     this.loiter = new Map(); // mmsi -> { t0, alerted }            (loitering)
-    this.stats = { stsCandidates: 0, stsAlerts: 0, loiterCandidates: 0, loiterAlerts: 0 };
+    this.stats = { stsCandidates: 0, stsAlerts: 0, loiterCandidates: 0, loiterAlerts: 0, stsShoreSuppressed: 0 };
   }
 
   start() {
@@ -59,6 +65,16 @@ export class Analytics extends EventEmitter {
   scan() {
     const now = Date.now();
     const ports = this.relay.ports;
+    // Shore-distance memo — one coast lookup per vessel per scan at most.
+    const shoreMemo = new Map();
+    const nearShore = (v) => {
+      let s = shoreMemo.get(v.mmsi);
+      if (s === undefined) {
+        s = this.coast.withinNm(v.lat, v.lon, STS_SHORE_NM);
+        shoreMemo.set(v.mmsi, s);
+      }
+      return s;
+    };
     // Collect stopped vessels in open water.
     const stopped = [];
     for (const v of this.relay.vessels.values()) {
@@ -109,6 +125,12 @@ export class Analytics extends EventEmitter {
             if (w.mmsi <= v.mmsi) continue; // each pair once
             const m = distM(v.lat, v.lon, w.lat, w.lon);
             if (m > PAIR_M) continue;
+            // Shore rule: a pair this close to a coastline is a roadstead /
+            // informal anchorage scene, not a covert mid-sea transfer.
+            if (STS_SHORE_NM && (nearShore(v) || nearShore(w))) {
+              this.stats.stsShoreSuppressed++;
+              continue;
+            }
             const pk = `${v.mmsi}-${w.mmsi}`;
             seen.add(pk);
             let p = this.pairs.get(pk);
