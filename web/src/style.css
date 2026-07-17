@@ -168,6 +168,12 @@
   .dosItem.open .dosHead b{color:var(--cyan)}
   .dosCount{font-size:9px;color:var(--dim);letter-spacing:.04em}
   .dosEvents{max-height:30vh;overflow-y:auto;padding:2px 0 4px}
+  /* conflict cluster: top-covered stories in the detail panel */
+  .cfEv{font-size:10px;line-height:1.5;color:var(--ink);padding:3px 0;border-top:1px dashed #14202b}
+  .cfEv b{color:var(--amber);font-weight:600;letter-spacing:.04em;margin-right:4px}
+  .cfEv a{color:var(--cyan);text-decoration:none}
+  .cfEv a:hover{text-decoration:underline}
+  .cfEv span{float:right;color:var(--dim);font-size:9px}
   .dosEv{font-size:10px;line-height:1.45;color:var(--ink);padding:3px 0;border-bottom:1px dashed #14202b;cursor:pointer}
   .dosEv:hover{background:#0f1922}
   .dosEv b{color:var(--red);font-weight:600;letter-spacing:.04em}

@@ -346,8 +346,12 @@ backpressure guard (§Optimization).
 
 ## 6. Known limitations to keep visible
 
-- **FIRMS global daily** can return sparse/header-only responses under the free
-  key's transaction limit; region-focused queries are more reliable.
+- **FIRMS area API is moody**: it intermittently returns header-only (zero
+  rows) even with a healthy key — observed flipping between 95k rows and none
+  within an hour (2026-07-16). Mitigated: the backend serves the last good
+  pull for up to 6 h when upstream comes back empty, and the layer fails over
+  NOAA-20 → NOAA-21 → MODIS if a satellite feed dies outright (Suomi-NPP did —
+  retired, header-only forever, which is why the layer sat at 0 for days).
 - **Bike-share `bikes` field** is null for GBFS v3 vehicle-type systems (e.g.
   Buenos Aires); docks/capacity still populate.
 - **Private repo** can't be *opened* by Mapillary/Windy reviewers — flip to
@@ -374,6 +378,15 @@ name), ✅ route stage (climb/cruise/descent, ±300 ft/min).
 
 ## 8. Changelog (high level)
 
+- **2026-07-16 (feed health)** — **Thermal fixed**: root cause was Suomi-NPP's
+  retirement (VIIRS_SNPP_NRT answers header-only forever) — default source is
+  now VIIRS_NOAA20_NRT (~95k global detections/day) with automatic client
+  failover (NOAA-21 → MODIS, incl. MODIS column/confidence differences) and a
+  backend last-good-pull cache (≤6 h) that rides out FIRMS's intermittent
+  empty responses. **Conflict/News upgraded**: CAMEO roots 13 THREAT + 15
+  FORCE POSTURE added (interstate sabre-rattling, build-ups — was only
+  street-level unrest), clusters carry actor pairs ("THE US ⇄ IRAN"), a kind
+  breakdown, and the 3 most-covered stories with links; 400 clusters served.
 - **2026-07-16 (detector tuning)** — **STS shore rule**: candidate pairs must
   now be ≥5 nm from any coastline (new `server/coast.js` — ~53k Natural Earth
   50m coast samples @ ~2 nm via `convert-coast.mjs`; `STS_MIN_SHORE_NM` to

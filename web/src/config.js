@@ -57,7 +57,11 @@ const CONFIG = {
   FIRMS: {      // NASA FIRMS thermal anomalies — free MAP_KEY at firms.modaps.eosdis.nasa.gov
     // Key lives in the backend .env (FIRMS_MAP_KEY), injected by the /firms
     // proxy — so it never ships in client source. Set FIRMS_MAP_KEY in .env.
-    url: "/api/firms", source: "VIIRS_SNPP_NRT", days: 1, refreshMs: 30 * 60e3,
+    // Suomi-NPP retired — its NRT feed now returns header-only. NOAA-20 is the
+    // workhorse; the layer falls back down this list if a source goes dark the
+    // same way (each returning 0 rows costs one cheap probe per refresh).
+    url: "/api/firms", source: "VIIRS_NOAA20_NRT", days: 1, refreshMs: 30 * 60e3,
+    fallbacks: ["VIIRS_NOAA21_NRT", "MODIS_NRT"],
     // Realistic-fire cut: the raw feed is every warm pixel on Earth (tens of
     // thousands — flares, crop burns, rooftops). Keep detections with fire
     // radiative power ≥ minFrp MW, or brightness ≥ minBright K if FRP absent.

@@ -7,15 +7,18 @@ import { unzipSync, strFromU8 } from 'fflate';
 // well, so we ingest those instead: each ~85 KB export.CSV.zip is the global
 // event table for one 15-minute window, CAMEO-coded and geocoded.
 //
-// We keep a rolling 24 h store of conflict-class events (protest, coercion,
-// assault, fight, mass violence), cluster them to half-degree cells, and serve
-// the clusters to the frontend. On first call we backfill the last 3 h so the
-// layer starts populated.
+// We keep a rolling 24 h store of conflict-class events — threats and military
+// force posture (mobilizations, exercises, ultimatums) through protest,
+// coercion, assault, fighting and mass violence — cluster them to half-degree
+// cells with their actors, and serve the clusters to the frontend. On first
+// call we backfill the last 3 h so the layer starts populated.
 
 const ROOT = 'http://data.gdeltproject.org/gdeltv2/';
 const LASTUPDATE = ROOT + 'lastupdate.txt';
-// CAMEO root codes: 14 protest, 17 coerce, 18 assault, 19 fight, 20 mass violence.
-const CONFLICT_ROOTS = new Set(['14', '17', '18', '19', '20']);
+// CAMEO root codes: 13 threaten, 14 protest, 15 force posture, 17 coerce,
+// 18 assault, 19 fight, 20 mass violence. 13/15 are what lift the layer from
+// street-level unrest to the interstate picture (sabre-rattling, build-ups).
+const CONFLICT_ROOTS = new Set(['13', '14', '15', '17', '18', '19', '20']);
 const KEEP_MS = 24 * 3600e3;
 const BACKFILL_STEPS = 12; // 12 × 15 min = 3 h
 const REFRESH_MS = 15 * 60e3;
@@ -58,6 +61,8 @@ async function ingestFile(stamp) {
       lon,
       place: c[52] || '—', // ActionGeo_FullName
       root,
+      a1: c[6] || null, // Actor1Name — who did it
+      a2: c[16] || null, // Actor2Name — to whom
       articles: +c[33] || 1, // NumArticles
       url: c[60] || null, // SOURCEURL
       t,
@@ -71,20 +76,22 @@ function evict() {
 }
 
 const ROOT_LABEL = {
+  13: 'THREAT',
   14: 'PROTEST',
+  15: 'FORCE POSTURE',
   17: 'COERCION',
   18: 'ASSAULT',
   19: 'FIGHTING',
   20: 'MASS VIOLENCE',
 };
 
-function clusters(max = 300) {
+function clusters(max = 400) {
   const cells = new Map(); // "lat,lon" (0.5°) -> cluster
   for (const e of events.values()) {
     const key = `${Math.round(e.lat * 2) / 2},${Math.round(e.lon * 2) / 2}`;
     let c = cells.get(key);
     if (!c) {
-      c = { lat: 0, lon: 0, events: 0, articles: 0, top: null, kinds: {} };
+      c = { lat: 0, lon: 0, events: 0, articles: 0, tops: [], kinds: {} };
       cells.set(key, c);
     }
     c.events++;
@@ -92,20 +99,37 @@ function clusters(max = 300) {
     c.lat += e.lat;
     c.lon += e.lon;
     c.kinds[ROOT_LABEL[e.root]] = (c.kinds[ROOT_LABEL[e.root]] || 0) + 1;
-    if (!c.top || e.articles > c.top.articles) c.top = e;
+    // Keep the cluster's 3 most-covered events for the detail panel.
+    c.tops.push(e);
+    if (c.tops.length > 3) {
+      c.tops.sort((a, b) => b.articles - a.articles);
+      c.tops.length = 3;
+    }
   }
   return [...cells.values()]
     .sort((a, b) => b.articles - a.articles)
     .slice(0, max)
-    .map((c) => ({
-      lat: +(c.lat / c.events).toFixed(3),
-      lon: +(c.lon / c.events).toFixed(3),
-      events: c.events,
-      articles: c.articles,
-      place: c.top.place,
-      kind: Object.entries(c.kinds).sort((a, b) => b[1] - a[1])[0][0],
-      url: c.top.url,
-    }));
+    .map((c) => {
+      const top = c.tops.sort((a, b) => b.articles - a.articles)[0];
+      return {
+        lat: +(c.lat / c.events).toFixed(3),
+        lon: +(c.lon / c.events).toFixed(3),
+        events: c.events,
+        articles: c.articles,
+        place: top.place,
+        kind: Object.entries(c.kinds).sort((a, b) => b[1] - a[1])[0][0],
+        kinds: c.kinds,
+        // Headline actors from the most-covered event (GDELT names are UPPERCASE).
+        actors: top.a1 ? (top.a2 && top.a2 !== top.a1 ? `${top.a1} ⇄ ${top.a2}` : top.a1) : null,
+        url: top.url,
+        top: c.tops.map((e) => ({
+          kind: ROOT_LABEL[e.root],
+          actors: e.a1 ? (e.a2 && e.a2 !== e.a1 ? `${e.a1} ⇄ ${e.a2}` : e.a1) : null,
+          articles: e.articles,
+          url: e.url,
+        })),
+      };
+    });
 }
 
 export async function getConflict() {

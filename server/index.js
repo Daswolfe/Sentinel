@@ -22,6 +22,7 @@ if (parentPid) {
 const relay = new AisRelay();
 let outagesCache = { t: 0, data: null }; // Cloudflare Radar outages (15-min cache)
 let maritimeCache = null; // preprocessed maritime-boundary index (static)
+const firmsCache = new Map(); // "source/box/days" -> { t, body } — last GOOD FIRMS pull
 
 // Google 3D Tiles free-tier meter — persisted so restarts can't reset it.
 // Counts ROOT tileset requests (the billable unit); resets each calendar month.
@@ -344,18 +345,39 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/plain' });
       return res.end(''); // no key → empty; the layer reports OFF
     }
-    const source = (url.searchParams.get('source') || 'VIIRS_SNPP_NRT').replace(/[^A-Za-z0-9_]/g, '');
+    const source = (url.searchParams.get('source') || 'VIIRS_NOAA20_NRT').replace(/[^A-Za-z0-9_]/g, '');
     const box = url.searchParams.get('box') || '-180,-90,180,90';
     const days = Math.min(10, Math.max(1, Number(url.searchParams.get('days')) || 1));
     if (!/^[-\d.,]+$/.test(box)) return json(res, 400, { error: 'bad box' });
+    // FIRMS's area API intermittently answers header-only (no data rows) even
+    // with a healthy key — observed mid-2026: the same query flips between 95k
+    // rows and none within the hour. Remember the last GOOD body per query and
+    // serve it (≤6 h old) whenever upstream comes back empty, so the layer
+    // never goes blank because NASA is having a moment.
+    const fKey = `${source}/${box}/${days}`;
     try {
       const r = await fetch(
         `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${CONFIG.firmsKey}/${source}/${box}/${days}`,
       );
+      let body = await r.text();
+      const hasRows = r.ok && body.includes('\n') && body.trim().split('\n').length > 1;
+      const cached = firmsCache.get(fKey);
+      if (hasRows) {
+        firmsCache.set(fKey, { t: Date.now(), body });
+        if (firmsCache.size > 8) firmsCache.delete(firmsCache.keys().next().value);
+      } else if (cached && Date.now() - cached.t < 6 * 3600e3) {
+        body = cached.body;
+      }
       cors(res);
-      res.writeHead(r.status, { 'Content-Type': 'text/plain' });
-      return res.end(await r.text());
+      res.writeHead(hasRows || body.length > 200 ? 200 : r.status, { 'Content-Type': 'text/plain' });
+      return res.end(body);
     } catch (e) {
+      const cached = firmsCache.get(fKey);
+      if (cached && Date.now() - cached.t < 6 * 3600e3) {
+        cors(res);
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        return res.end(cached.body);
+      }
       return json(res, 502, { error: String(e) });
     }
   }

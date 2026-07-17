@@ -40,20 +40,33 @@ export default {
       const box = bbox
         ? `${bbox[1]},${bbox[0]},${bbox[3]},${bbox[2]}`
         : '-180,-90,180,90';
-      const u =
-        `${CONFIG.FIRMS.url}?source=${CONFIG.FIRMS.source}&box=${box}&days=${CONFIG.FIRMS.days}`;
-      const text = (await (await fetch(u)).text()).trim();
-      // Empty body = backend has no FIRMS_MAP_KEY set → report OFF, not error.
-      if (!text) {
-        ctx.setLayerData('FIRMS', new Float32Array(0), []);
-        ctx.ui.status('FIRMS', 'off');
-        return;
+      // Try the configured satellite, then the fallbacks: a retired satellite's
+      // NRT feed (e.g. Suomi-NPP, 2026) answers with a header and ZERO rows,
+      // which previously read as "no fires on Earth" — silently empty forever.
+      let text = '';
+      let source = this._source ?? CONFIG.FIRMS.source;
+      for (const s of [source, ...CONFIG.FIRMS.fallbacks.filter((f) => f !== source)]) {
+        const u = `${CONFIG.FIRMS.url}?source=${s}&box=${box}&days=${CONFIG.FIRMS.days}`;
+        text = (await (await fetch(u)).text()).trim();
+        // Empty body = backend has no FIRMS_MAP_KEY set → report OFF, not error.
+        if (!text) {
+          ctx.setLayerData('FIRMS', new Float32Array(0), []);
+          ctx.ui.status('FIRMS', 'off');
+          return;
+        }
+        if (text.includes('\n')) {
+          if (s !== source) ctx.ui.tick(`FIRMS — ${source} feed empty, switched to ${s}`);
+          source = s;
+          break;
+        }
       }
+      this._source = source; // remember what actually delivered
       const csv = text.split('\n');
       const head = csv[0].split(',');
       const la = head.indexOf('latitude');
       const lo = head.indexOf('longitude');
-      const br = head.indexOf('bright_ti4');
+      // VIIRS calls it bright_ti4, MODIS calls it brightness.
+      const br = head.indexOf('bright_ti4') !== -1 ? head.indexOf('bright_ti4') : head.indexOf('brightness');
       const fr = head.indexOf('frp');
       const cf = head.indexOf('confidence');
       const dn = head.indexOf('daynight');
@@ -61,7 +74,8 @@ export default {
       const rows = [];
       for (const r of all) {
         const c = r.split(',');
-        if (c[cf] === 'l') continue; // low-confidence pixel
+        // Low-confidence pixel: VIIRS marks 'l', MODIS uses a 0–100 number.
+        if (c[cf] === 'l' || (isFinite(+c[cf]) && +c[cf] < 30)) continue;
         const frp = +c[fr];
         const bright = +c[br];
         if (!(frp >= CONFIG.FIRMS.minFrp || (!isFinite(frp) && bright >= CONFIG.FIRMS.minBright)))
@@ -92,7 +106,7 @@ export default {
             'DAY/NIGHT': c[dn] === 'D' ? 'day pass' : 'night pass',
             LAT: lat.toFixed(2) + '°',
             LON: lon.toFixed(2) + '°',
-            SOURCE: 'NASA FIRMS ' + CONFIG.FIRMS.source,
+            SOURCE: 'NASA FIRMS ' + source,
           },
         });
       });
