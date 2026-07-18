@@ -1026,6 +1026,13 @@ async function pollHealth() {
   const el = document.getElementById('healthStrip');
   try {
     const h = await (await fetch('/api/health')).json();
+    // Token-gated host but this browser has no token → say so plainly instead
+    // of letting every layer sit at ERR with no explanation.
+    if (h.auth && !localStorage.getItem('sentinel.token')) {
+      el.textContent = 'ACCESS TOKEN REQUIRED — open the link with ?token=…';
+      el.classList.add('down');
+      return;
+    }
     const s = h.ais?.stats ?? {};
     el.textContent =
       (h.ais?.mode === 'replay' ? 'REPLAY · ' : '') +

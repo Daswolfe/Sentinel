@@ -24,6 +24,34 @@ let outagesCache = { t: 0, data: null }; // Cloudflare Radar outages (15-min cac
 let maritimeCache = null; // preprocessed maritime-boundary index (static)
 const firmsCache = new Map(); // "source/box/days" -> { t, body } — last GOOD FIRMS pull
 
+// ── Shared-viewer upstream cache (Theme 5: one host, many browsers) ────
+// Every viewer polls the same proxies; without memoization N viewers would
+// multiply upstream key usage N× (OpenSky credits, Windy quota, adsb.lol
+// goodwill). Short-TTL response cache: N viewers cost what one costs. Only
+// 200s are cached; cache hits carry an 'X-Cache: hit' header.
+const upstreamCache = new Map(); // key -> { t, type, body }
+async function viaCache(res, key, ttlMs, fn) {
+  const hit = upstreamCache.get(key);
+  if (hit && Date.now() - hit.t < ttlMs) {
+    cors(res);
+    res.writeHead(200, { 'Content-Type': hit.type, 'X-Cache': 'hit' });
+    return res.end(hit.body);
+  }
+  let out;
+  try {
+    out = await fn(); // -> { status, type, body }
+  } catch (e) {
+    out = { status: 502, type: 'application/json', body: JSON.stringify({ error: String(e) }) };
+  }
+  if (out.status === 200) {
+    upstreamCache.set(key, { t: Date.now(), type: out.type, body: out.body });
+    if (upstreamCache.size > 300) upstreamCache.delete(upstreamCache.keys().next().value);
+  }
+  cors(res);
+  res.writeHead(out.status, { 'Content-Type': out.type });
+  return res.end(out.body);
+}
+
 // Google 3D Tiles free-tier meter — persisted so restarts can't reset it.
 // Counts ROOT tileset requests (the billable unit); resets each calendar month.
 const TILES_USAGE_FILE = new URL('./data/google-tiles-usage.json', import.meta.url);
@@ -145,15 +173,17 @@ const server = http.createServer(async (req, res) => {
   const isApi = url.pathname.startsWith('/api/');
   if (isApi) url.pathname = url.pathname.slice(4);
 
-  // Static frontend (web/dist) for anything that isn't an API call — this is
-  // what the desktop shell window loads, giving it same-origin /api + /ws.
-  if (!isApi && req.method === 'GET' && url.pathname !== '/health' && !ROUTES.has(url.pathname)) {
-    if (await serveStatic(url.pathname, res)) return;
-  }
-
   if (url.pathname !== '/health' && rateLimited(clientIp(req))) {
     res.setHeader('Retry-After', '60');
     return json(res, 429, { error: 'rate limited — slow down' });
+  }
+
+  // Static frontend (web/dist) for anything that isn't an API call — what the
+  // desktop shell and shared-viewer browsers load, giving them same-origin
+  // /api + /ws. Rate-limited like everything else, but NOT token-gated: the
+  // page must be able to load before the user has anywhere to put a token.
+  if (!isApi && req.method === 'GET' && url.pathname !== '/health' && !ROUTES.has(url.pathname)) {
+    if (await serveStatic(url.pathname, res)) return;
   }
 
   // Optional shared-token auth (BACKEND_TOKEN). /health stays open — it's
@@ -167,6 +197,7 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/health') {
     return json(res, 200, {
       ok: true,
+      auth: Boolean(CONFIG.token), // viewers need ?token=… when true
       ais: {
         enabled: relay.enabled,
         mode: relay.mode, // live | record | replay
@@ -425,7 +456,7 @@ const server = http.createServer(async (req, res) => {
     const lon = parseFloat(url.searchParams.get('lon'));
     const radius = Math.min(500, Math.max(5, Number(url.searchParams.get('radius')) || 200));
     const nearby = Number.isFinite(lat) && Number.isFinite(lon) ? `&nearby=${lat},${lon},${radius}` : '';
-    try {
+    return viaCache(res, 'webcams' + nearby, 5 * 60e3, async () => {
       const r = await fetch(
         `https://api.windy.com/webcams/api/v3/webcams?limit=50&sortKey=popularity&sortDirection=desc&include=images,location,urls${nearby}`,
         { headers: { 'x-windy-api-key': CONFIG.windyKey } },
@@ -444,10 +475,12 @@ const server = http.createServer(async (req, res) => {
           link: w.urls?.detail,
         }))
         .filter((w) => w.lat != null);
-      return json(res, 200, { webcams, total: j.total ?? webcams.length });
-    } catch (e) {
-      return json(res, 502, { error: String(e) });
-    }
+      return {
+        status: r.ok ? 200 : r.status,
+        type: 'application/json',
+        body: JSON.stringify({ webcams, total: j.total ?? webcams.length }),
+      };
+    });
   }
 
   // Nearest Mapillary street-level image to a point — token injected server-side.
@@ -457,7 +490,7 @@ const server = http.createServer(async (req, res) => {
     const lon = Number(url.searchParams.get('lon'));
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return json(res, 400, { error: 'bad lat/lon' });
     const d = 0.0012; // ~130 m box — Mapillary rejects large bboxes
-    try {
+    return viaCache(res, `sv${lat.toFixed(4)},${lon.toFixed(4)}`, 10 * 60e3, async () => {
       const r = await fetch(
         `https://graph.mapillary.com/images?access_token=${CONFIG.mapillaryToken}` +
           `&bbox=${lon - d},${lat - d},${lon + d},${lat + d}` +
@@ -477,24 +510,22 @@ const server = http.createServer(async (req, res) => {
         (a, b) =>
           (a.lat - lat) ** 2 + (a.lon - lon) ** 2 - ((b.lat - lat) ** 2 + (b.lon - lon) ** 2),
       );
-      return json(res, 200, { image: imgs[0] || null, count: imgs.length });
-    } catch (e) {
-      return json(res, 502, { error: String(e) });
-    }
+      return {
+        status: r.ok ? 200 : r.status,
+        type: 'application/json',
+        body: JSON.stringify({ image: imgs[0] || null, count: imgs.length }),
+      };
+    });
   }
 
   // Military aircraft — adsb.lol /v2/mil (CORS-blocked in-browser, so proxied).
   if (url.pathname === '/milair') {
-    try {
+    return viaCache(res, 'milair', 15e3, async () => {
       const r = await fetch('https://api.adsb.lol/v2/mil', {
         headers: { 'User-Agent': 'ARGUS/0.5 (github.com/Daswolfe/Argus)' },
       });
-      cors(res);
-      res.writeHead(r.status, { 'Content-Type': 'application/json' });
-      return res.end(await r.text());
-    } catch (e) {
-      return json(res, 502, { error: String(e) });
-    }
+      return { status: r.status, type: 'application/json', body: await r.text() };
+    });
   }
 
   // METAR/TAF proxy — aviationweather.gov (no key; proxied to sidestep CORS).
@@ -502,16 +533,12 @@ const server = http.createServer(async (req, res) => {
     const ids = (url.searchParams.get('ids') || '').toUpperCase();
     if (!/^[A-Z0-9]{3,4}(,[A-Z0-9]{3,4})*$/.test(ids))
       return json(res, 400, { error: 'bad ids' });
-    try {
+    return viaCache(res, 'avwx' + ids, 5 * 60e3, async () => {
       const r = await fetch(
         `https://aviationweather.gov/api/data/metar?ids=${ids}&format=json&taf=true`,
       );
-      cors(res);
-      res.writeHead(r.status, { 'Content-Type': 'application/json' });
-      return res.end(await r.text());
-    } catch (e) {
-      return json(res, 502, { error: String(e) });
-    }
+      return { status: r.status, type: 'application/json', body: await r.text() };
+    });
   }
 
   // Conflict clusters — GDELT 2.0 bulk events, rolling 24 h, clustered 0.5°.
@@ -524,15 +551,12 @@ const server = http.createServer(async (req, res) => {
   }
 
   // OpenSky proxy — holds the OAuth2 secret server-side, passes bbox through.
+  // 20 s cache: viewers poll every 30–60 s, so a crowd shares one credit spend.
   if (url.pathname === '/opensky') {
-    try {
+    return viaCache(res, 'opensky' + url.search, 20e3, async () => {
       const out = await fetchStates(url.search);
-      cors(res);
-      res.writeHead(out.status, { 'Content-Type': 'application/json' });
-      return res.end(out.body);
-    } catch (e) {
-      return json(res, 502, { error: String(e) });
-    }
+      return { status: out.status, type: 'application/json', body: out.body };
+    });
   }
 
   json(res, 404, { error: 'not found' });

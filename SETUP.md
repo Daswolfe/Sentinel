@@ -386,3 +386,31 @@ Behind one reverse proxy (nginx/Caddy): serve the built `web/dist` statically an
 route `/api/*` and `/ws` to the Node backend (`npm run start` in `server/`). Because
 dev already uses those same paths via the Vite proxy, nothing changes between dev and
 prod. A Docker Compose one-liner is on the roadmap.
+
+
+---
+
+## Sharing your instance (one host, many viewers)
+
+ARGUS is single-operator by design, but the backend can serve any number of
+read-along browsers directly — your keys never leave the server, and short-TTL
+response caching means five viewers cost the same upstream quota as one.
+
+1. **Build the frontend once**: `npm run build` (the backend serves `web/dist`
+   itself — no nginx needed for casual sharing).
+2. **Set an access token** in `.env`: `BACKEND_TOKEN=<long-random-string>`,
+   then start the backend (`npm start`).
+3. **Open the firewall** for the port (Windows, admin PowerShell):
+   `netsh advfirewall firewall add rule name="ARGUS" dir=in action=allow protocol=TCP localport=8787`
+4. **Share the link**: `http://<your-LAN-IP>:8787/?token=<token>` — the token
+   is stored client-side on first open and scrubbed from the URL; every API
+   call and the live websocket carry it automatically afterwards.
+
+For access from outside your LAN, forward TCP 8787 on your router to this
+machine and share `http://<public-IP>:8787/?token=…` instead. The per-IP rate
+limiter (`RATE_LIMIT_PER_MIN`, default 300/min) and websocket cap
+(`WS_MAX_PER_IP`, default 4) are already on. Plain HTTP means the token rides
+unencrypted — fine among friends, but put a TLS reverse proxy (Caddy is a
+two-liner) in front before sharing anything you'd mind a coffee-shop network
+reading. Each viewer keeps their own watchlists/tripwires/dossiers
+(browser-local); the live picture, alerts, and analytics are shared.

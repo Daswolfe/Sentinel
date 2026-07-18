@@ -1,4 +1,32 @@
 /* ═══════════════════════════ CONFIG ═══════════════════════════ */
+
+// Shared-hosting access token (Theme 5). When the backend sets BACKEND_TOKEN,
+// viewers open  http://<host>:8787/?token=<token>  once — the token is
+// stashed in localStorage, scrubbed from the visible URL, and from then on
+// every /api fetch and the websocket carry it automatically.
+const TOKEN = (() => {
+  try {
+    const q = new URLSearchParams(location.search).get('token');
+    if (q) {
+      localStorage.setItem('sentinel.token', q);
+      const u = new URL(location.href);
+      u.searchParams.delete('token'); // keep it out of screenshots/history
+      history.replaceState(null, '', u);
+    }
+    return q || localStorage.getItem('sentinel.token') || '';
+  } catch (_) {
+    return '';
+  }
+})();
+if (TOKEN && typeof window !== 'undefined') {
+  const raw = window.fetch.bind(window);
+  window.fetch = (u, o) => {
+    if (typeof u === 'string' && u.startsWith('/api'))
+      u += (u.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(TOKEN);
+    return raw(u, o);
+  };
+}
+
 const CONFIG = {
   SAT: {
     // CelesTrak group: "visual" (~160 brightest), "stations", "active" (~11k —
@@ -39,7 +67,8 @@ const CONFIG = {
     live: false,               // set true automatically when the AIS relay connects
     wsUrl:
       typeof location !== 'undefined'
-        ? (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws'
+        ? (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws' +
+          (TOKEN ? `?token=${encodeURIComponent(TOKEN)}` : '')
         : 'ws://localhost:8787/ws',
     snapUrl: '/api/ais/snapshot',
     AISSTREAM_KEY: "",         // key now lives in the backend .env, not here

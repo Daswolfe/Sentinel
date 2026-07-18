@@ -320,27 +320,37 @@ the "S" in OSINT. **All items shipped:**
     health strip shows REPLAY. Bundled demo tape:
     `server/data/demo-scenario.ndjson` (Europe/Med box). Unit-tested.
 
-### Theme 5 — Multi-user distribution *(⏸ SHELVED per operator, 2026-07-14)*
+### Theme 5 — Multi-user distribution *(✅ DONE — 2026-07-17, self-hosted)*
 One backend (one set of keys) serving several trusted viewers, each in their
-own browser window. Plan is drawn up; resume when wanted:
-1. **Shared upstream TTL cache** — cache proxied responses (OpenSky ~20 s,
-   milair ~20 s, etc.) so N viewers cost one key's quota. The critical piece.
-2. **Token support in the frontend** — `?token=` picked up once, persisted,
-   attached to every fetch + the WS; auth gate scoped to /api + /ws only
-   (static assets open, else the page can't even load).
-3. **Exposure**: Tailscale tailnet (recommended, private) or Cloudflare
-   Tunnel (public HTTPS URL, optional email-gated Access).
-4. Optional: viewer build of the Tauri shell pointing at the remote URL.
-Foundations already shipped: static serving w/ same-origin /api + /ws,
-per-IP rate limiting + WS caps, server-side Google-tiles meter, WS broadcast
-backpressure guard (§Optimization).
+own browser window, hosted directly by the operator (no tunnel/VPN — per
+operator choice). Shipped:
+- **Shared upstream TTL cache** (`viaCache` in `server/index.js`) — OpenSky
+  20 s, milair 15 s, METAR/webcams 5 min, streetview 10 min; only 200s cached,
+  hits marked `X-Cache: hit`. N viewers cost ONE key's quota. (gpsjam,
+  bikeshare, conflict, outages, maritime, FIRMS already cached internally.)
+- **Viewer token flow** — share `http://<host-ip>:8787/?token=<BACKEND_TOKEN>`;
+  the frontend stores the token, scrubs it from the URL, and attaches it to
+  every /api fetch (global wrapper in `web/src/config.js`) + the websocket.
+  Auth gate covers /api + /ws only; static assets and /health stay open (the
+  page must load before a token can matter) but ARE rate-limited. Health strip
+  says "ACCESS TOKEN REQUIRED" on a gated host with no local token.
+- **Setup guide** — SETUP.md §"Sharing your instance": build, set
+  BACKEND_TOKEN, firewall/port-forward, share the link; TLS caveat for
+  beyond-the-LAN sharing.
+- Verified end-to-end against a token-gated instance: static 200 tokenless,
+  API 401→200 with token, cache hits, live authenticated WS (3.1k vessels),
+  URL scrubbing, all layers LIVE.
+Each viewer keeps their own watchlists/tripwires/dossiers (browser-local);
+the live picture, alerts, and analytics are shared. Foundations from earlier:
+same-origin static serving, per-IP rate limiting + WS caps, Google-tiles
+meter, WS backpressure guard.
 
 ### Recommended next 3 moves
-1. **Diagnose the shelved Google 3D Tiles render-pass conflict** (#13).
-2. **Multi-user distribution** (Theme 5) when unshelved.
-3. **Route-anomaly lane baseline** (§3) — the last unbuilt analytic; the SQLite
-   track archive has been accumulating since 07-08. Contributor on-ramp (#16)
-   stays shelved.
+1. **Route-anomaly lane baseline** (§3) — the last unbuilt analytic; the SQLite
+   track archive has been accumulating since 07-08.
+2. **Diagnose the shelved Google 3D Tiles render-pass conflict** (#13).
+3. **TLS for shared hosting** (Caddy two-liner in front of :8787) if sharing
+   beyond the LAN. Contributor on-ramp (#16) stays shelved.
 
 ---
 
@@ -378,6 +388,15 @@ name), ✅ route stage (climb/cruise/descent, ±300 ft/min).
 
 ## 8. Changelog (high level)
 
+- **2026-07-17** — **Theme 5 shipped: self-hosted multi-user.** Shared
+  upstream TTL cache (`viaCache`: OpenSky 20 s, milair 15 s, METAR/webcams
+  5 min, streetview 10 min — N viewers spend ONE key's quota, hits marked
+  `X-Cache: hit`); viewer token flow (`?token=` → localStorage → every /api
+  fetch + the WS, URL scrubbed); auth gate scoped to /api + /ws with static
+  assets rate-limited but open; "ACCESS TOKEN REQUIRED" health-strip hint;
+  SETUP.md §Sharing (build → BACKEND_TOKEN → firewall/port-forward → share
+  the link). Verified end-to-end against a token-gated instance: 401→200
+  with token, cache hits, authenticated live WS, all layers LIVE.
 - **2026-07-16 (feed health)** — **Thermal fixed**: root cause was Suomi-NPP's
   retirement (VIIRS_SNPP_NRT answers header-only forever) — default source is
   now VIIRS_NOAA20_NRT (~95k global detections/day) with automatic client
