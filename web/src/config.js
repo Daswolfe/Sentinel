@@ -55,7 +55,7 @@ const CONFIG = {
     trailMinutes: 30,   // flight-trail persistence
     // OWN-SENSOR FEED: if you run a receiver (tar1090/readsb/dump1090), point
     // this at its JSON and ARGUS uses YOUR antenna — zero rate limits.
-    // Typical: "http://localhost:8080/data/aircraft.json"  (see SETUP.md)
+    // Typical: "http://localhost:8080/data/aircraft.json"  (see README §9)
     localFeed: "",
   },
   // minMag 4.5 default: below that is instrumentation chatter, not destruction.

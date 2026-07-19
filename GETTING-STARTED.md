@@ -237,9 +237,9 @@ create and edit it, using the terminal you already know how to open.
 6. Start the app again: `npm run dev`. The ships layer switches from simulated to
    live.
 
-Which keys do what, and where to get each one, is listed in **`SETUP.md`** (the
-fuller guide). The pattern is always the same: get a free key, paste it after the
-matching `=` in `.env`, save, restart.
+Which keys do what, and where to get each one, is listed in **`README.md`** (the
+fuller guide — see "Going live"). The pattern is always the same: get a free key,
+paste it after the matching `=` in `.env`, save, restart.
 
 > **Good to know:** the `.env` file holds your private keys and is deliberately kept
 > off the internet. Don't share it or post it anywhere.

@@ -1,315 +1,278 @@
 # ARGUS
 
-An open-source **4D geospatial command center**. One 3D globe fusing live
-satellites, aircraft, **maritime AIS with dark-ship detection**, seismic events,
-conflict/news, rocket launches, thermal anomalies, and NASA imagery — with a
-4D time scrubber, region focus, an alert engine, and optional local-LLM intel
-reports.
+An open-source **4D geospatial command center**. One Three.js globe fusing live
+satellites, aircraft (civil + military), maritime AIS with **dark-ship
+detection**, seismic, conflict/news, GPS jamming, thermal, launches, airports,
+webcams, and more — with deep-zoom imagery + 3D buildings, weather radar, a 4D
+time scrubber, tripwires, per-nation dossiers, an alert engine, and local-LLM
+intel reports. Runs on one machine; shareable to any browser you hand a link.
+
+> **Never used a terminal?** Read **`GETTING-STARTED.md`** first — it assumes
+> nothing. This file is the full reference.
 
 ---
 
-sentinel/
-├── server/                 Node backend (no framework, minimal deps)
-│   ├── index.js            HTTP (health, /opensky[/track], /ais/snapshot|track,
-│   │                       /gpsjam, /conflict, /avwx) + WS relay + optional auth
-│   ├── ais.js          ★   aisstream client + vessel state + DARK-SHIP engine
-│   ├── analytics.js    ★   STS-transfer detection + cross-layer correlation
-│   ├── ports.js        ★   ports/anchorages index — suppresses in-port silences
-│   ├── gdelt.js        ★   GDELT 2.0 bulk-event ingester (rolling 24 h clusters)
-│   ├── gpsjam.js           gpsjam.org daily H3 → GPS-DENIED zones + cells
-│   ├── bikeshare.js        curated GBFS systems → merged station availability
-│   ├── opensky.js          OAuth2 token manager + states/tracks proxy
-│   ├── db.js               optional SQLite persistence (tracks 48 h, alerts 30 d)
-│   ├── verify-ais.js   ★   run when online: checks aisstream schema vs ais.js
-│   ├── fixtures/           captured live AIS message — schema lock for tests
-│   ├── config.js           AIS boxes (global default), thresholds, auth token
-│   └── data/               wpi.json (NGA ~2,900 ports) + anchorages.json
-│                           (GFW ~14,700 named anchorages, AIS-derived)
-├── web/                    Vite frontend (vanilla JS — Three.js is imperative,
-│   ├── index.html          so no React tax)
-│   ├── vite.config.js      dev proxy: /api + /ws → backend
-│   ├── registry.test.js    tests for the layer registry/context
-│   └── src/
-│       ├── main.js     ★   HOST: globe + wiring + UI/picking/timeline/alerts
-│       ├── registry.js ★   LayerContext + LayerRegistry (the layer framework)
-│       │                   + region filtering + contact filters + icon sprites
-│       ├── tiles.js    ★   deep-zoom ground imagery (Esri tiles on the sphere)
-│       ├── radar.js        global animated precip radar (RainViewer mercator drape)
-│       ├── markers.js  ★   ghost trails + heading-oriented arrow markers
-│       ├── runways.js      airport diagrams + wind-based runway-in-use logic
-│       ├── contactFilters.js  nationality (MID / hex blocks), mil-civ, watchlist
-│       ├── labels.js       billboarded text sprites (nation/city names)
-│       ├── config.js       all layer config + region presets
-│       ├── globe.js        shared geo helpers (GLOBE_R, llToV)
-│       ├── style.css
-│       └── layers/     ★   ONE FILE PER DATA SOURCE
-│           ├── satellites.js  aircraft.js  milair.js  sea.js  seismic.js
-│           ├── events.js  conflict.js  launches.js  thermal.js
-│           ├── jamming.js  airports.js  cities.js  bikeshare.js  stubs.js
-│           └── maritime.js    (live-AIS websocket client used by sea.js)
-├── .env.example            copy → .env, add your keys
-└── package.json            workspaces + one `npm run dev`
+## 1. Quick start
+
+Prerequisite: **Node.js 18+**.
+
+```bash
+npm install          # both workspaces (server + web)
+cp .env.example .env # optional — add keys as you get them
+npm run dev          # backend :8787 + frontend :5173 together
 ```
 
-**Frontend choice:** Vite + vanilla JS, not React/Next. The globe is imperative
-Three.js; a component framework would fight it and add weight for no gain. Vite
-gives you HMR, a real build, and npm dependencies (Three.js and satellite.js are
-now proper imports, not CDN globals).
+Open **http://localhost:5173**. ARGUS runs with **zero keys** — you get every
+keyless layer live (satellites, aircraft on the anonymous tier, seismic,
+weather, conflict, jamming, launches, airports, cities, sea boundaries, radar,
+military air, bike share) and a maritime *simulation* until you add an AIS key.
+Every sidebar row carries a provenance badge: **LIVE** real data · **SIM**
+synthetic · **OFF** not wired / no key · **ERR** source failed.
 
-**Want a real desktop app later?** Wrap `web/` in **Tauri** (Rust shell, ~10 MB
-installer) for a native "runs locally on a machine" build without shipping a whole
-Chromium like Electron. The backend can run as a sidecar process. Not needed now —
-noted for the roadmap.
+`npm test` runs the suite (20 tests, no network). `npm run build` produces
+`web/dist`, which the backend serves itself at `http://localhost:8787/`.
 
-## Adding a new layer (the whole point of the refactor)
+---
 
-Every data source is a self-contained module in `web/src/layers/`. A layer is a
-plain object with an `id`, a `load(ctx)` that fetches and plots, and optional
-lifecycle hooks. It never touches a global — everything comes through `ctx`.
+## 2. Going live — keys in build order
+
+Each step is independent and additive. All secrets go in **`.env`** (gitignored);
+frontend tuning lives in **`web/src/config.js`**.
+
+| Step | Key / setup | Unlocks |
+|---|---|---|
+| 1 | *(nothing)* | globe + all keyless layers |
+| 2 | `OPENSKY_ID` / `OPENSKY_SECRET` — free API client on your OpenSky account page | aircraft 400 → 4,000 pulls/day (backend does the OAuth2; secret never reaches the browser) |
+| 3 | `AISSTREAM_KEY` — free at aisstream.io (GitHub sign-in) | live global AIS + the dark-ship / STS / loitering engines. Run **`npm run verify-ais`** once online to confirm the feed schema. |
+| 4 | `FIRMS_MAP_KEY` — free at firms.modaps.eosdis.nasa.gov | thermal/fire layer (VIIRS NOAA-20/21 with automatic failover; backend keeps the last good pull ≤6 h because NASA's area API is moody) |
+| 5 | `WINDY_WEBCAMS_KEY` / `MAPILLARY_ACCESS_TOKEN` | public webcams layer + street-level imagery on surface click |
+| 6 | `CLOUDFLARE_API_TOKEN` | internet-outage annotations (Net Outages layer) |
+| 7 | [Ollama](https://ollama.com) + `ollama pull llama3.1:8b` | streamed intel SITREPs + per-nation dossier briefs, fully local (`OLLAMA_MODEL` to swap models) |
+| 8 | Own ADS-B receiver (see §8) | unlimited local aircraft feed + OpenSky 8,000/day contributor tier |
+
+---
+
+## 3. Sharing your instance (one host, many viewers)
+
+Your machine runs the backend and holds the keys; friends open a link. Short-TTL
+response caching means N viewers cost the same upstream quota as one.
+
+1. `npm run build` — the backend serves `web/dist` itself, no nginx needed.
+2. In `.env` set `BACKEND_TOKEN=<long-random-string>`, then `npm start`.
+3. Open the firewall (Windows, admin PowerShell):
+   `netsh advfirewall firewall add rule name="ARGUS" dir=in action=allow protocol=TCP localport=8787`
+4. Share **`http://<your-LAN-IP>:8787/?token=<token>`**. The token stores
+   client-side on first open, scrubs itself from the URL, and rides every API
+   call + the websocket automatically.
+
+Outside your LAN: forward TCP 8787 on your router and share your public IP the
+same way. Already on for you: per-IP rate limiting (`RATE_LIMIT_PER_MIN`,
+default 300), a websocket cap (`WS_MAX_PER_IP`, default 4), and the shared
+upstream cache. Plain HTTP sends the token in the clear — fine among friends;
+put a TLS proxy (Caddy) in front for anything more. Each viewer keeps their own
+watchlists/tripwires/dossiers (browser-local); the live picture, alerts, and
+analytics are shared. Or ship the code instead: `git archive --format=zip -o
+ARGUS.zip HEAD` (never zip the folder raw — it contains your `.env`).
+
+## 4. Desktop app
+
+`npm run desktop` (needs Rust + the repo) builds a native shell:
+`src-tauri/target/release/argus-desktop.exe` and an NSIS installer under
+`…/bundle/nsis/`. The exe spawns `node server/index.js`, waits for :8787, and
+opens a window on the same-origin UI; closing it kills the backend (a parent-PID
+watchdog covers force-kills). The installer ships only the shell — the machine
+still needs Node and this repo.
+
+## 5. Recorded-scenario replay (demo / offline mode)
+
+Capture the live AIS feed, replay it later with **no key** — the full ingest
+path runs (dark-ship, STS, loitering, alerts), looping at end-of-file. The
+health strip shows REPLAY.
+
+```
+AIS_RECORD=data/scenario.ndjson   # tap the live feed to a file (needs a key)
+AIS_REPLAY=data/scenario.ndjson   # play it back, keyless
+AIS_REPLAY_SPEED=10               # 1 h of capture in 6 min
+```
+
+---
+
+## 6. The maritime pipeline
+
+```
+aisstream.io ──wss──► server/ais.js ──► index.js ──ws──► layers/sea.js ──► globe
+              (state + dark engine)      (relay)          (SEA + DARK)
+```
+
+- **One clean record per MMSI**, deduplicated from the raw firehose; position
+  updates batched every 2 s; late joiners get a snapshot.
+- **Dark ships**: underway (≥3 kt) then silent past 30 min → DARK flag; a
+  transmit after that → **resurface** alert with dark-minutes + jump nm.
+  False positives suppressed by **~17.7k ports/anchorages** (NGA WPI + Global
+  Fishing Watch named anchorages + curated chokepoints).
+- **STS transfers**: two vessels ≤0.8 kt, ≤500 m apart, ≥25 min, away from any
+  anchorage **and ≥5 nm from any coastline** (`STS_MIN_SHORE_NM`, 0 disables) —
+  the shore rule keeps rafted ships in nearshore roadsteads from false-flagging.
+- **Loitering**: one vessel stopped in open water ≥3 h (anchorage-filtered).
+- **Correlation**: every maritime alert is enriched server-side — inside a
+  GPS-denied zone? conflict clusters nearby? — before it reaches the UI.
+- **Persistence** (optional, auto-detected): WAL SQLite keeps vessel fixes 48 h
+  + alerts 30 d; the History panel queries it by time / kind / region.
+- Coverage caveat: aisstream's free feed is volunteer *terrestrial* receivers —
+  some sectors (Persian Gulf / India observed) deliver nothing. Paid satellite
+  AIS is the only fix.
+
+Thresholds live in `server/config.js` (`ais` block) and `.env`; `/health`
+reports flags-vs-suppressions so you can tune. Detection quality knobs that
+came from live tuning: surveillance-orbit trigger needs **10 full loops**
+(practice-circuit proof), STS shore rule above.
+
+---
+
+## 7. What's on the globe
+
+**Layers** — satellites (full CelesTrak active catalog, client-side SGP4),
+aircraft + military air (oriented ✈), maritime AIS + dark ships (oriented ➤,
+ghost trails on all movers), seismic (M≥4.5 slider), weather/events (EONET +
+point weather with wind rose), conflict/news (GDELT 2.0 bulk events, 24 h,
+threats & force posture through mass violence, clustered with actors + top
+stories), GPS jamming (denied-zone hulls), thermal/fire (FIRMS, plain-English
+fire scale), launches, airports (decoded METAR/TAF + runway-in-use diagram),
+cities, **sea boundaries** (EEZ blue / disputed red / 24 nm violet / 12 nm teal,
+Marine Regions v12), bike share, webcams, net outages, weather radar (⛆),
+deep-zoom Esri imagery in a two-level pyramid (no black edges when tilted) +
+OSM Buildings 3D extrusions (⌂), day/night terminator (☾).
+
+**Operator UI** — header search (name/MMSI/callsign/hex); region presets
+(Hormuz, Taiwan Strait, …) that focus every layer and narrow API queries;
+click = detail panel (+flight profile for aircraft), double-click = orbit-focus,
+right-drag at low altitude = free-look; ⤢ MEASURE great-circle tape; ⚙ UNITS
+panel (ft/m/FL · kt/km·h/mph · nm/km/mi · °C/°F · DD/DMS); per-layer style menus
+(colour/icon/size, persisted); contact filters (flag state, mil/civ, watchlist,
+underway, altitude/orbit bands, ship class, aircraft category, emergency-only,
+fast movers, dark-duration, constellation, flight stage, density cap);
+draggable/collapsible panels (off-screen positions self-heal); alerts with
+sound toggle 🔔, ack/delete/click-to-locate; 4D scrubber + DVR (IndexedDB, ≤48 h)
++ 📷 snapshot export.
+
+**Intelligence** — tripwires (draw a polygon or pick a nation's airspace; counts
+in/out by class and logs *who* crossed — click a crossing to re-focus it);
+surveillance-orbit detector; per-nation dossiers auto-accrued from attributable
+alerts (clickable events, streamed LLM briefs); pattern-of-life history queries;
+nation highlight walls; watchlist with alert-on-appear; ⌁ SITREP report that
+leads with cross-layer-correlated events.
+
+## 8. Adding a layer (the architecture)
+
+```
+server/   no-framework Node: AIS relay + analytics, per-source proxies (secrets
+          stay here), rate limiting, static hosting of web/dist, SQLite
+web/src/  Vite + vanilla Three.js. main.js is the host; registry.js is the
+          framework; every data source is ONE FILE in web/src/layers/.
+```
+
+A layer never touches a global — everything arrives through `ctx`:
 
 ```js
 // web/src/layers/mylayer.js
-import { CONFIG } from '../config.js';
-
 export default {
-  id: 'MINE',
-  name: 'My Layer',
-  color: 0x44ff88, css: '#44ff88',
-  interval: 5 * 60e3,          // optional auto-refresh (ms)
-
+  id: 'MINE', name: 'My Layer', color: 0x44ff88, css: '#44ff88',
+  interval: 5 * 60e3,               // optional auto-refresh
   async load(ctx) {
     ctx.ui.status('MINE', 'wait');
     const data = await (await fetch('https://…')).json();
     const pos = new Float32Array(data.length * 3);
     const meta = [];
     data.forEach((d, i) => {
-      const v = ctx.llToV(d.lat, d.lon, ctx.R + 0.5);   // shared geo helper
-      pos[i*3] = v.x; pos[i*3+1] = v.y; pos[i*3+2] = v.z;
-      meta.push({ layer: 'MINE', headline: d.name, rows: { /* detail panel */ } });
+      const v = ctx.llToV(d.lat, d.lon, ctx.R + 0.5);
+      pos.set([v.x, v.y, v.z], i * 3);
+      meta.push({ layer: 'MINE', lat: d.lat, lon: d.lon,
+                  headline: d.name, rows: { /* detail panel */ } });
     });
-    ctx.setLayerData('MINE', pos, meta);                // plot it
+    ctx.setLayerData('MINE', pos, meta);
     ctx.ui.status('MINE', 'ok');
   },
-
-  // Optional hooks:
-  //   init(ctx)        one-time setup (add scene objects, open a socket)
-  //   tick(ctx)        called on the fast ticker (e.g. satellites propagate)
-  //   onScrub(ctx, t)  re-render for the 4D time scrubber (t = epoch ms or null)
-  //   onRegion(ctx)    react to region-focus change (ctx.region())
-  //   companions:[…]   extra layer defs this module also renders into (see sea.js)
-  //   onVisible(on)    react to the sidebar toggle (e.g. aircraft trails)
+  // optional hooks: init(ctx) · tick(ctx) · onScrub(ctx,t) · onRegion(ctx)
+  //                 onVisible(on) · lazy:true · defaultOff:true · companions:[…]
 };
 ```
 
-Then register it in `web/src/main.js`:
-```js
-import mylayer from './layers/mylayer.js';
-registry.addAll([ …, mylayer ]);
-```
+Import it in `main.js`, add to `registry.addAll([...])` — sidebar row, status
+badge, timers, picking, scrubber, and filters all come free. Use `setLive`
+instead of `setLayerData` to make a layer time-scrubbable.
 
-That's it — the sidebar row, status dot, refresh timer, picking, scrubber, and
-alert plumbing all work automatically. **The core (`main.js`) never changes when
-you add a layer.** `ctx` gives a layer: `setLayerData` / `setLive` (scrubber-aware),
-`llToV` + `R`, `ui` (status/count/tick), `alerts`, `region()`, `scrubTime()`, and
-the shared `scene` + `THREE`.
+**Data prep scripts** (`server/data/`, one-time, outputs committed):
+`convert-anchorages.mjs` (GFW CSV → anchorage index), `convert-maritime.mjs`
+(Marine Regions WFS → EEZ/12nm/24nm boundary polylines),
+`convert-coast.mjs` (Natural Earth coastline → shore-distance samples).
 
----
+## 9. Own ADS-B receiver (optional hardware)
 
-## Quick start
-
-```bash
-# 1. install (root installs both workspaces)
-npm install
-
-# 2. add your keys
-cp .env.example .env        # then edit .env
-
-# 3. run backend + frontend together
-npm run dev
-# frontend  → http://localhost:5173
-# backend   → http://localhost:8787  (health: /health)
-```
-
-Runs with **no keys at all** — you just get the maritime *simulation* instead of
-live AIS, and anonymous (rate-limited) aircraft. Add keys to go live.
-
-To run the pieces separately: `npm run dev:server` and `npm run dev:web`.
+RTL-SDR dongle + 1090 MHz antenna + Raspberry Pi (~$40–70), flashed with the
+**adsb.im** image. Feed OpenSky (Feeder page → request a serial; ≥30% monthly
+uptime = 8,000 credits/day), then point `AIR.localFeed` in `web/src/config.js`
+at your tar1090 JSON (`http://<pi>:8080/data/aircraft.json`) for unlimited
+local traffic.
 
 ---
 
-## The maritime pipeline (the focus of this build)
+## 10. `.env` reference
 
-Live AIS is the reason a backend exists. Here's the full path:
+| Key | Purpose |
+|---|---|
+| `BACKEND_PORT` | backend port (default 8787) |
+| `BACKEND_TOKEN` | access token — REQUIRED before exposing beyond localhost (§3) |
+| `RATE_LIMIT_PER_MIN` / `WS_MAX_PER_IP` / `TRUST_PROXY` | per-IP request cap (300, 0=off) · websocket cap (4) · honor X-Forwarded-For behind a proxy |
+| `AISSTREAM_KEY` | live maritime AIS |
+| `AIS_RECORD` / `AIS_REPLAY` / `AIS_REPLAY_SPEED` | scenario capture + keyless replay (§5) |
+| `STS_MIN_SHORE_NM` | STS shore rule, nm from coastline (default 5, 0 disables) |
+| `OPENSKY_ID` / `OPENSKY_SECRET` | OpenSky OAuth2 |
+| `FIRMS_MAP_KEY` | NASA FIRMS thermal |
+| `WINDY_WEBCAMS_KEY` / `MAPILLARY_ACCESS_TOKEN` | webcams / street-level |
+| `CLOUDFLARE_API_TOKEN` | net outages |
+| `OLLAMA_URL` / `OLLAMA_MODEL` | local LLM (default `llama3.1:8b`) |
+| `GOOGLE_MAPS_KEY` / `GOOGLE_TILES_MONTHLY_CAP` | Photorealistic 3D Tiles (shelved — see §12). The backend meters root requests (cap 900/mo of the 1,000 free) so the key can never accrue charges |
 
-```
-aisstream.io  ──wss──►  server/ais.js  ──►  server/index.js  ──ws──►  web/…/maritime.js  ──►  globe
- (raw messages)        (state + dark          (relay +               (vessel map +          (SEA + DARK
-                        detection)             snapshot)              alert routing)          layers)
-```
+Frontend knobs (`web/src/config.js`): layer URLs/refresh rates, `AIR.localFeed`,
+FIRMS source + fire-power cut, jamming thresholds, DVR cadence, region presets,
+`BUILDINGS.provider` (`'osm'` default / `'google'` experimental).
 
-### 1. Get a key (free)
-Sign in at **[aisstream.io](https://aisstream.io)** with GitHub, copy the key into
-`.env` as `AISSTREAM_KEY=…`. Restart the backend. That's it — the relay connects,
-subscribes to the chokepoint bounding boxes in `server/config.js`, and starts
-streaming.
+## 11. Deploying
 
-**Before trusting the feed, verify the schema** (do this the first time you're
-online):
-```bash
-npm run verify-ais
-```
-This connects to aisstream, captures real messages from a busy box (Singapore
-Strait), and confirms every field `ais.js` reads actually exists in the live
-payload. If aisstream ever changes their schema, it prints exactly which path
-drifted so you fix `_ingest()` in one place instead of debugging blind.
+- **Simplest**: §3 — the backend serves everything on :8787.
+- **Docker**: `docker compose up --build` → nginx on :8080 serving `web/dist`,
+  proxying `/api` + `/ws` to the backend container.
+- **Reverse proxy**: serve `web/dist`, route `/api/*` and `/ws` to :8787 — same
+  paths as dev, nothing changes.
 
-### 2. What the backend does (`server/ais.js` + `server/ports.js`)
-- Connects to aisstream over websocket with auto-reconnect + exponential backoff.
-- Subscribes **globally** by default (8 quadrant boxes — tens of thousands of
-  vessels; a lighter chokepoint preset is commented in `config.js`). Note:
-  aisstream's free feed is volunteer *terrestrial* receivers — sectors without
-  active receivers (observed: Persian Gulf / India) deliver nothing; satellite AIS
-  (paid) is the fix for guaranteed coverage.
-- Maintains **one clean record per MMSI** (position, SOG, COG, heading, name, type,
-  destination) — deduplicating the raw firehose.
-- Runs the **dark-ship engine**: a vessel that was *underway* (SOG ≥ 3 kt) and then
-  goes *silent past the threshold* (default 30 min) is flagged **DARK** — the
-  classic "AIS off" tradecraft for sanctions evasion and covert ship-to-ship
-  transfers. When a dark vessel transmits again, it emits a **resurface** alert with
-  how long it was dark and how far it jumped (great-circle nm).
-- **Suppresses false positives with a ports/anchorages filter** (`ports.js`):
-  a vessel that goes quiet within range of a known port or anchorage is *not*
-  flagged, because berthing/anchoring silence is legitimate. Backed by **~17.7k
-  anchorages/ports**: the NGA **World Port Index** (~2,900, public domain,
-  `server/data/wpi.json`) **+ Global Fishing Watch named anchorages** (~14,700,
-  AIS-derived — where ships *actually* sit still — grouped from 166k S2 cells into
-  `server/data/anchorages.json`) + a curated chokepoint seed list, all indexed on
-  a coarse spatial grid for fast lookup. The `/health` endpoint reports how many
-  flags were raised vs. suppressed so you can tune the thresholds.
-- **Batches** position updates every 2 s and pushes them (plus immediate alerts)
-  to all connected browsers. Late-joiners get a full snapshot on connect.
+## 12. Status, shelved & backlog
 
-Tunable knobs (`config.js` → `ais`): `underwaySog`, `darkThresholdMin`,
-`minReportsBeforeDark`, `broadcastMs`, `boxes`, memory guards.
+**Done** (Themes 1–4, mid-2026): intelligence depth (correlation→SITREP,
+watchlist v2, tripwires + airspace, orbit detector, loitering, dossiers,
+history), new sensors (webcams, street-level, net outages), cartography
+(jamming hulls, nation walls, sea boundaries), UX/packaging (units panel,
+Docker, rate limiting, desktop shell, replay), optimization pass (persistent
+GPU buffers, meta-based region filter, backpressure guard), shared-viewer
+hosting.
 
-### Analytics on top of the picture (`server/analytics.js`)
-- **STS-transfer candidates**: two vessels stopped (≤ 0.8 kt), ≤ 500 m apart, away
-  from any port/anchorage, holding ≥ 25 min → alert with separation + hold time.
-- **Loitering**: a single vessel stopped in open water (anchorage-filtered) for
-  ≥ 3 h → alert. The GFW anchorage index above is what keeps this from firing on
-  every legitimately anchored ship.
-- **Cross-layer correlation**: every maritime alert is enriched before broadcast —
-  is the event inside/near a GPS-denied zone? are there conflict clusters within
-  250 km? The context rides on the alert text in the UI.
-- **Persistence** (`server/db.js`, optional): vessel breadcrumb fixes (48 h) and
-  alerts (30 d) in WAL-mode SQLite survive restarts; `/ais/track` serves the longer
-  history transparently. If `better-sqlite3` isn't available the server just runs
-  without it.
-- **Auth**: set `BACKEND_TOKEN` in `.env` before exposing the backend beyond
-  localhost — REST then wants `Authorization: Bearer <token>` (or `?token=`), the
-  websocket wants `/ws?token=`.
+**Shelved** — *Google Photorealistic 3D Tiles*: streaming, registration, and a
+hard billing gate all work (`CONFIG.BUILDINGS.provider='google'` to resume),
+but a deep-zoom render-pass conflict (viewport collapses to one draw call)
+needs diagnosis; OSM extrusions remain active. *Contributor on-ramp*: per
+operator choice. *Multi-user via tunnels*: superseded by direct hosting (§3).
 
-### 3. What the frontend does (`web/src/layers/maritime.js`)
-A pure module (no THREE/DOM) that connects to the relay, keeps a local vessel map
-in sync from `snapshot` + `update` messages, and hands clean arrays plus alerts to
-callbacks. `main.js` turns those into globe points on the **SEA** and **DARK**
-layers and routes alerts into the existing alert engine. If the backend is down,
-`CONFIG.SEA.live` stays false and the built-in simulation transparently takes over.
+**Backlog**: route-anomaly detection (needs a lane baseline from the SQLite
+archive or EMODnet/MarineCadastre rasters), FIR/airspace boundary data, power
+outages + X/social stubs, satellite constellation grouping polish, binary WS
+frames if viewer counts grow.
 
-### Verify it's working
-```bash
-curl http://localhost:8787/health
-# → { ok:true, ais:{ enabled:true, status:"ok", tracked: <n> }, … }
-```
+**Known limits**: FIRMS area API intermittently returns empty (mitigated by
+last-good caching); aisstream terrestrial coverage gaps; WebGL screenshot
+capture resists the dev harness (verify via scene introspection).
 
----
-
-## Aircraft: OpenSky OAuth2 (higher limits)
-
-Put `OPENSKY_ID` / `OPENSKY_SECRET` in `.env` (create an API client on your OpenSky
-account page). The frontend calls `/api/opensky`, and the backend attaches the
-bearer token server-side — so the secret never reaches the browser, and you get
-4,000 credits/day (8,000 if you feed a receiver — see the receiver build in the
-main setup guide). Region Focus narrows the bounding box to keep credits cheap.
-
----
-
-## Other layers
-
-All keyless and live out of the box: satellites (CelesTrak `active` catalog + SGP4,
-propagated client-side, TLEs cached against CelesTrak's 2 h re-download throttle),
-seismic (USGS, magnitude slider — defaults to **M ≥ 4.5**, destructive events),
-weather/events (NASA EONET + Open-Meteo), conflict/news (GDELT 2.0 **bulk events**
-ingested by the backend — the old GDELT GEO JSON API is dead), GPS jamming
-(gpsjam.org via the backend, thresholded to the deliberate-interference band and
-clustered into ringed **GPS-DENIED ZONES**), launches (Launch Library 2),
-**airports** (OurAirports large/medium — click a field for **decoded METAR/TAF, a
-wind compass rose, and a runway diagram with the into-wind runways highlighted**),
-**cities** (Natural Earth, default-off), aircraft dossiers (adsbdb), imagery (NASA
-GIBS: HD 8K Blue Marble or daily MODIS — plus **Esri World Imagery tiles that
-stream in under the camera below ~2,200 km altitude, down to building scale**).
-Thermal/fire needs a free NASA FIRMS key and ships a realistic default cut
-(FRP ≥ 10 MW, with plain-English fire-scale context in the detail panel).
-Power/internet outages and X/social are stubbed with labeled adapters.
-
-Also live and keyless: **military aircraft** (adsb.lol's global mil feed, via the
-backend), **bike share** (curated GBFS systems merged server-side — ~10k stations
-across NYC/Chicago/Paris/Montréal/Toronto/… with live bikes/docks, a lazy default-off
-layer), and a **global precipitation-radar** overlay (`⛆ RADAR` — RainViewer's mosaic
-fuses US NOAA NEXRAD with worldwide radar, animated through the last ~2 h of frames).
-
-**Movers carry ghost trails and heading arrows.** Aircraft, ships, and satellites
-draw a short fading breadcrumb trail (always on, for every contact — not just the
-focused one). Aircraft, military aircraft, and ships default to **direction-oriented
-arrow markers** (chevrons laid flat on the globe pointing along track/COG); the icon
-picker switches any oriented layer between the arrow and a dot/glyph.
-
-**Contacts are interactive**: click an aircraft for its full flight path plus an
-altitude/ground-speed profile panel (OpenSky tracks API); click a vessel for its
-breadcrumb history; **double-click any object to orbit-focus it** (the camera
-swivels around the object's local vertical — double-click empty space to release).
-A header **search bar** finds contacts by name / MMSI / callsign / hex. Sidebar
-filters cut the plot by **flag state, military vs civilian, or a notable-contact
-watchlist**; each layer row has a **color picker and icon picker** (persisted).
-
-Every sidebar row shows a data-provenance badge — **LIVE** (real data), **SIM**
-(synthetic), **OFF** (not wired / no key), **ERR** (source failed). Alerts are
-click-to-locate, acknowledgeable, and deletable. Region Focus hides all data
-originating outside the selected bbox; satellites are kept if they have line of
-sight to the region. A **DVR** records one frame a minute to IndexedDB (window
-adjustable up to 48 h) so the 4D scrubber reaches hours back, and 📷 SNAPSHOT
-exports the whole global picture as JSON. The header health strip mirrors
-`/health` (tracked vessels, dark flags vs suppressions, STS alerts, DB status).
-
-## Intelligence layer (the "S" in OSINT)
-
-Beyond plotting, ARGUS derives insight:
-
-- **Analytics engine** (`server/analytics.js`) — dark-ship detection, ship-to-ship
-  transfer candidates, and single-vessel **loitering**, all suppressed by ~14.7k
-  Global Fishing Watch anchorages. Every maritime alert is enriched with
-  **cross-layer correlation** (inside a GPS-denied zone? near a conflict cluster?).
-- **Surveillance-orbit detector** (`web/src/orbitwatch.js`) — flags aircraft
-  circling one spot (ISR / holding signature) via a winding-number test.
-- **Tracking boxes / tripwires** (`web/src/tripwires.js`) — draw a polygon (or
-  build one from a nation's borders) and count contacts entering/exiting by class.
-- **Per-nation dossiers** (`web/src/dossiers.js`) — auto-accrue from attributable
-  alerts by flag state (MMSI MID / ICAO24 hex), with a streamed **local-LLM brief**
-  per nation (Ollama, via `/api/llm`). The SITREP report leads with the
-  highest-signal correlated events.
-- **Pattern-of-life** — the SQLite archive (`server/db.js`) is queryable by
-  time / kind / bounding-box.
-- **Net Outages** — Cloudflare Radar internet-outage annotations; **CCTV** (Windy
-  Webcams) and **Mapillary** street-level imagery on demand.
-
----
-
-## Deploying
-
-Behind one reverse proxy (nginx/Caddy): serve the built `web/dist` statically and
-route `/api/*` and `/ws` to the Node backend. Because dev already uses those same
-paths via the Vite proxy, nothing changes between dev and prod.
+**User feature log**: dark-ship pulse ring at last known location — ✅ shipped
+(`web/src/darkpulse.js`).
 
 ## License
 
-MIT. Respect each data provider's terms of use (see `LICENSE`).
+MIT. Respect each data provider's terms (see `LICENSE`).
