@@ -55,7 +55,9 @@ frontend tuning lives in **`web/src/config.js`**.
 ## 3. Sharing your instance (one host, many viewers)
 
 Your machine runs the backend and holds the keys; friends open a link. Short-TTL
-response caching means N viewers cost the same upstream quota as one.
+response caching means N viewers cost the same upstream quota as one. Two
+step-by-step companion guides: **`HOST-SETUP.md`** (you, running the server) and
+**`VIEWER-GUIDE.md`** (hand this to the people you share the link with).
 
 1. `npm run build` — the backend serves `web/dist` itself, no nginx needed.
 2. In `.env` set `BACKEND_TOKEN=<long-random-string>`, then `npm start`.
